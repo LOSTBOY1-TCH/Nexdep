@@ -75,12 +75,19 @@ const siteStatsSchema = new mongoose.Schema({
 })
 const SiteStats = mongoose.model("SiteStats", siteStatsSchema)
 
+// Authentication Middleware Function
+const requireAuth = (req, res, next) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: "Not authenticated" })
+  }
+  next()
+}
+
 // Initialize Admin
 async function initializeAdmin() {
   try {
     const adminExists = await User.findOne({ username: "nex" })
     if (!adminExists) {
-      const crypto = require("crypto")
       const hashedPassword = crypto.createHash("sha256").update("n1n2nanaagye").digest("hex")
       await User.create({
         username: "nex",
@@ -106,7 +113,6 @@ app.post("/api/signup", async (req, res) => {
     if (exists) {
       return res.json({ success: false, message: "Username or email already exists" })
     }
-    const crypto = require("crypto")
     const hashedPassword = crypto.createHash("sha256").update(password).digest("hex")
     const user = await User.create({ username, email, password: hashedPassword })
     req.session.userId = user._id
@@ -124,7 +130,6 @@ app.post("/api/login", async (req, res) => {
     if (!user) {
       return res.json({ success: false, message: "User not found" })
     }
-    const crypto = require("crypto")
     const hashedPassword = crypto.createHash("sha256").update(password).digest("hex")
     if (user.password !== hashedPassword) {
       return res.json({ success: false, message: "Invalid password" })
@@ -157,7 +162,10 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     }
     const MAX_SIZE = 5 * 1024 * 1024 * 1024 // 5GB
     if (req.file.size > MAX_SIZE) {
-      return res.json({ success: false, message: "File too large" })
+      return res.json({ success: false, message: "File exceeds 5GB limit" })
+    }
+    if (req.file.buffer.length > MAX_SIZE) {
+      return res.json({ success: false, message: "File exceeds 5GB limit" })
     }
 
     const downloadSlug = crypto.randomBytes(16).toString("hex")
@@ -166,17 +174,21 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     })
 
     uploadStream.on("finish", async () => {
-      await FileMetadata.create({
+      const fileMetadata = await FileMetadata.create({
         filename: downloadSlug,
         originalName: req.file.originalname,
         uploaderId: req.session.userId,
         uploaderName: req.session.username,
-        size: req.file.size,
+        size: req.file.size, // Store actual size
         mimeType: req.file.mimetype,
         downloadSlug,
         visibility: "public",
       })
-      res.json({ success: true, downloadSlug })
+      res.json({ success: true, downloadSlug, actualSize: req.file.size })
+    })
+
+    uploadStream.on("error", (err) => {
+      res.json({ success: false, message: "Upload stream error: " + err.message })
     })
 
     uploadStream.end(req.file.buffer)
@@ -192,11 +204,19 @@ app.get("/api/download/:slug", async (req, res) => {
       return res.status(404).json({ error: "File not found" })
     }
 
-    await FileMetadata.updateOne({ _id: metadata._id }, { $inc: { downloadCount: 1 } })
-
     const downloadStream = gridFSBucket.openDownloadStreamByName(req.params.slug)
+
     res.setHeader("Content-Disposition", `attachment; filename="${metadata.originalName}"`)
     res.setHeader("Content-Type", metadata.mimeType)
+    res.setHeader("Content-Length", metadata.size)
+
+    await FileMetadata.updateOne({ _id: metadata._id }, { $inc: { downloadCount: 1 } })
+
+    downloadStream.on("error", (err) => {
+      console.error("Download stream error:", err)
+      res.status(500).json({ error: "Download error" })
+    })
+
     downloadStream.pipe(res)
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -216,11 +236,8 @@ app.get("/api/file/:slug", async (req, res) => {
 })
 
 // Routes - User
-app.get("/api/user/profile", async (req, res) => {
+app.get("/api/user/profile", requireAuth, async (req, res) => {
   try {
-    if (!req.session.userId) {
-      return res.json({ success: false, message: "Not authenticated" })
-    }
     const user = await User.findById(req.session.userId).select("-password")
     res.json({ success: true, user })
   } catch (err) {
@@ -228,11 +245,8 @@ app.get("/api/user/profile", async (req, res) => {
   }
 })
 
-app.get("/api/user/files", async (req, res) => {
+app.get("/api/user/files", requireAuth, async (req, res) => {
   try {
-    if (!req.session.userId) {
-      return res.json({ success: false, message: "Not authenticated" })
-    }
     const files = await FileMetadata.find({ uploaderId: req.session.userId })
     res.json({ success: true, files })
   } catch (err) {
@@ -358,8 +372,18 @@ app.get("/api/search", async (req, res) => {
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")))
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "public/login.html")))
 app.get("/signup", (req, res) => res.sendFile(path.join(__dirname, "public/signup.html")))
-app.get("/profile", (req, res) => res.sendFile(path.join(__dirname, "public/profile.html")))
-app.get("/upload", (req, res) => res.sendFile(path.join(__dirname, "public/upload.html")))
+app.get("/profile", (req, res) => {
+  if (!req.session.userId) {
+    return res.redirect("/login")
+  }
+  res.sendFile(path.join(__dirname, "public/profile.html"))
+})
+app.get("/upload", (req, res) => {
+  if (!req.session.userId) {
+    return res.redirect("/login")
+  }
+  res.sendFile(path.join(__dirname, "public/upload.html"))
+})
 app.get("/file/:slug", (req, res) => res.sendFile(path.join(__dirname, "public/file.html")))
 app.get("/leaderboard", (req, res) => res.sendFile(path.join(__dirname, "public/leaderboard.html")))
 app.get("/view/:slug", (req, res) => res.sendFile(path.join(__dirname, "public/view.html")))
