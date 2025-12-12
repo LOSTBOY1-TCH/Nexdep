@@ -186,7 +186,6 @@
           credentials: 'include'
         });
         const data = await response.json();
-        console.log('[v0] Dashboard auth check:', data);
         if (data.authenticated) {
           document.getElementById('auth-buttons').style.display = 'none';
           const userMenu = document.getElementById('user-menu');
@@ -200,12 +199,13 @@
             userMenu.appendChild(adminLink);
           }
         } else {
-          // Not authenticated, redirect to landing
-          window.location.href = '/';
+          document.getElementById('auth-buttons').style.display = 'flex';
+          document.getElementById('user-menu').style.display = 'none';
         }
       } catch (err) {
         console.error('Auth check error:', err);
-        window.location.href = '/';
+        document.getElementById('auth-buttons').style.display = 'flex';
+        document.getElementById('user-menu').style.display = 'none';
       }
     }
 
