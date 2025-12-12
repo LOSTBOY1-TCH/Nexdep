@@ -162,10 +162,9 @@ app.post("/api/login", async (req, res) => {
 
     req.session.save((err) => {
       if (err) {
-        console.error("[v0] Session save error:", err)
+        console.error("Session save error:", err)
         return res.json({ success: false, message: "Session error" })
       }
-      console.log("[v0] Session saved successfully:", { userId: user._id, username: user.username })
       res.json({ success: true, redirect: "/dashboard" })
     })
   } catch (err) {
@@ -179,12 +178,6 @@ app.get("/api/logout", (req, res) => {
 })
 
 app.get("/api/auth/check", (req, res) => {
-  console.log("[v0] Auth check - Session data:", {
-    userId: req.session.userId,
-    username: req.session.username,
-    sessionID: req.sessionID,
-  })
-
   if (req.session.userId) {
     res.json({
       authenticated: true,
