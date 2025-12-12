@@ -80,11 +80,11 @@
     <nav>
       <a href="/">Home</a>
       <a href="/leaderboard">Leaderboard</a>
-      <div class="auth-buttons" id="auth-buttons">
+      <div class="auth-buttons" id="auth-buttons" style="display: flex;">
         <button class="btn-nav btn-login" onclick="window.location.href='/login'"><i class="fas fa-sign-in-alt"></i> Login</button>
         <button class="btn-nav btn-signup" onclick="window.location.href='/signup'"><i class="fas fa-user-plus"></i> Sign Up</button>
       </div>
-      <div id="user-menu" style="display:none; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+      <div id="user-menu" style="display: none; gap: 15px; align-items: center; flex-wrap: wrap;">
         <span id="username" style="color: var(--primary); font-weight: bold;"></span>
         <a href="/profile"><i class="fas fa-user-circle"></i> Profile</a>
         <a href="/upload"><i class="fas fa-cloud-upload-alt"></i> Upload</a>
@@ -186,10 +186,15 @@
         const data = await response.json();
         if (data.success) {
           document.getElementById('auth-buttons').style.display = 'none';
-          document.getElementById('user-menu').style.display = 'flex';
+          const userMenu = document.getElementById('user-menu');
+          userMenu.style.display = 'flex';
           document.getElementById('username').textContent = data.user.username;
           if (data.user.isAdmin) {
-            document.getElementById('user-menu').innerHTML += '<a href="/_hidden_nexdrop_admin_9834" style="color: var(--primary); font-weight: bold; text-decoration: none;"><i class="fas fa-tools"></i> Admin</a>';
+            const adminLink = document.createElement('a');
+            adminLink.href = '/lostboy123';
+            adminLink.innerHTML = '<i class="fas fa-tools"></i> Admin';
+            adminLink.style.cssText = 'color: var(--primary); font-weight: bold; text-decoration: none;';
+            userMenu.appendChild(adminLink);
           }
         }
       } catch (err) {
