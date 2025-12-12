@@ -15,12 +15,18 @@ const upload = multer({ storage: multer.memoryStorage() })
 app.use(express.static("public"))
 app.use(express.json({ limit: "100mb" }))
 app.use(express.urlencoded({ limit: "100mb", extended: true }))
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "nexdrop-secret-key",
-    resave: false,
+    secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
+    resave: true, // Changed to true to save session on every request
     saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 },
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      httpOnly: true, // Prevent client-side JS from accessing cookie
+      secure: false, // Set to true in production with HTTPS
+      sameSite: "lax", // Protect against CSRF
+    },
   }),
 )
 
@@ -115,9 +121,19 @@ app.post("/api/signup", async (req, res) => {
     }
     const hashedPassword = crypto.createHash("sha256").update(password).digest("hex")
     const user = await User.create({ username, email, password: hashedPassword })
+
     req.session.userId = user._id
     req.session.username = user.username
-    res.json({ success: true, redirect: "/dashboard" })
+    req.session.isAdmin = false
+
+    req.session.save((err) => {
+      if (err) {
+        console.error("[v0] Session save error:", err)
+        return res.json({ success: false, message: "Session error" })
+      }
+      console.log("[v0] Signup session saved:", { userId: user._id, username: user.username })
+      res.json({ success: true, redirect: "/dashboard" })
+    })
   } catch (err) {
     res.json({ success: false, message: err.message })
   }
@@ -137,11 +153,20 @@ app.post("/api/login", async (req, res) => {
     if (user.isBanned) {
       return res.json({ success: false, message: "Your account is banned" })
     }
+
+    // Set session variables
     req.session.userId = user._id
     req.session.username = user.username
     req.session.isAdmin = user.isAdmin
 
-    res.json({ success: true, redirect: "/dashboard" })
+    req.session.save((err) => {
+      if (err) {
+        console.error("[v0] Session save error:", err)
+        return res.json({ success: false, message: "Session error" })
+      }
+      console.log("[v0] Session saved successfully:", { userId: user._id, username: user.username })
+      res.json({ success: true, redirect: "/dashboard" })
+    })
   } catch (err) {
     res.json({ success: false, message: err.message })
   }
@@ -153,6 +178,12 @@ app.get("/api/logout", (req, res) => {
 })
 
 app.get("/api/auth/check", (req, res) => {
+  console.log("[v0] Auth check - Session data:", {
+    userId: req.session.userId,
+    username: req.session.username,
+    sessionID: req.sessionID,
+  })
+
   if (req.session.userId) {
     res.json({
       authenticated: true,
