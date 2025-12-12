@@ -148,8 +148,11 @@ THEME: Red/Black Neon<br>
   <script>
     async function verifyAdminAccess() {
       try {
-        const response = await fetch('/api/auth/check');
+        const response = await fetch('/api/auth/check', {
+          credentials: 'include'
+        });
         const data = await response.json();
+        console.log('[v0] Hidden admin auth check:', data);
         if (!data.authenticated || !data.isAdmin) {
           alert('Access denied. Admin authentication required.');
           window.location.href = '/login';
@@ -161,6 +164,7 @@ THEME: Red/Black Neon<br>
           'Role: Administrator<br>' +
           'Access Level: Full Control';
       } catch (err) {
+        console.error('[v0] Hidden admin auth error:', err);
         alert('Authentication error. Please login.');
         window.location.href = '/login';
       }

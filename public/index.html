@@ -182,8 +182,11 @@
 
     async function checkAuth() {
       try {
-        const response = await fetch('/api/auth/check');
+        const response = await fetch('/api/auth/check', {
+          credentials: 'include'
+        });
         const data = await response.json();
+        console.log('[v0] Dashboard auth check:', data);
         if (data.authenticated) {
           document.getElementById('auth-buttons').style.display = 'none';
           const userMenu = document.getElementById('user-menu');
@@ -196,20 +199,24 @@
             adminLink.style.cssText = 'color: var(--primary); font-weight: bold; text-decoration: none;';
             userMenu.appendChild(adminLink);
           }
+        } else {
+          // Not authenticated, redirect to landing
+          window.location.href = '/';
         }
       } catch (err) {
         console.error('Auth check error:', err);
+        window.location.href = '/';
       }
     }
 
     async function logout() {
-      await fetch('/api/logout');
+      await fetch('/api/logout', { credentials: 'include' });
       window.location.href = '/';
     }
 
     checkAuth();
     loadFiles();
-    fetch('/api/views');
+    fetch('/api/views', { credentials: 'include' });
   </script>
 </body>
 </html>

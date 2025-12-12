@@ -70,12 +70,13 @@
         const response = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ username, password })
         });
         const data = await response.json();
         if (data.success) {
           messageDiv.innerHTML = '<div class="success-message"><i class="fas fa-check-circle"></i> Login successful! Redirecting...</div>';
-          setTimeout(() => window.location.href = data.redirect, 1500);
+          setTimeout(() => window.location.href = data.redirect, 1000);
         } else {
           messageDiv.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-circle"></i> ${data.message}</div>`;
         }

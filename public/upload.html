@@ -108,13 +108,17 @@
   <script>
     async function checkAuth() {
       try {
-        const response = await fetch('/api/user/profile');
+        const response = await fetch('/api/auth/check', {
+          credentials: 'include' // Added credentials to send session cookies
+        });
         const data = await response.json();
-        if (!data.success) {
+        console.log('[v0] Upload auth check:', data);
+        if (!data.authenticated) {
           alert('You must be signed in to upload files');
           window.location.href = '/login';
         }
       } catch (err) {
+        console.error('[v0] Auth check failed:', err);
         window.location.href = '/login';
       }
     }
@@ -183,6 +187,7 @@
           });
           
           xhr.open('POST', '/api/upload');
+          xhr.withCredentials = true; // Send cookies with XHR
           xhr.send(formData);
         } catch (err) {
           alert('Upload failed: ' + err.message);
