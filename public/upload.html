@@ -77,7 +77,7 @@
       <h2><i class="fas fa-cloud-upload-alt"></i> Upload Your Files</h2>
       
       <div class="upload-info">
-        <i class="fas fa-info-circle"></i> Maximum 5GB per file. Sign in required to upload.
+        <i class="fas fa-info-circle"></i> Maximum 5GB per file.
       </div>
       
       <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
@@ -106,23 +106,6 @@
   </footer>
 
   <script>
-    async function checkAuth() {
-      try {
-        const response = await fetch('/api/auth/check', {
-          credentials: 'include' // Added credentials to send session cookies
-        });
-        const data = await response.json();
-        console.log('[v0] Upload auth check:', data);
-        if (!data.authenticated) {
-          alert('You must be signed in to upload files');
-          window.location.href = '/login';
-        }
-      } catch (err) {
-        console.error('[v0] Auth check failed:', err);
-        window.location.href = '/login';
-      }
-    }
-
     const dropzone = document.getElementById('dropzone');
     
     dropzone.addEventListener('dragover', (e) => {
@@ -227,9 +210,6 @@
       navigator.clipboard.writeText(link);
       alert('Link copied to clipboard!');
     }
-
-    // Check auth on page load
-    checkAuth();
   </script>
 </body>
 </html>
