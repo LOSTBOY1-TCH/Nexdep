@@ -47,6 +47,8 @@
     
     .upload-info { background: rgba(229, 57, 53, 0.1); border: 1px solid var(--primary); border-radius: 8px; padding: 15px; margin-bottom: 20px; font-size: 14px; }
     .upload-info i { color: var(--primary); margin-right: 8px; }
+    .upload-info.success { background: rgba(81, 207, 102, 0.1); border-color: #51cf66; }
+    .upload-info.success i { color: #51cf66; }
     
     input[type="file"] { display: none; }
     
@@ -76,7 +78,7 @@
       <h2><i class="fas fa-cloud-upload-alt"></i> Upload Your Files</h2>
       
       <div class="upload-info">
-        <i class="fas fa-info-circle"></i> Maximum 5GB per file. Files larger than 10MB are stored permanently.
+        <i class="fas fa-info-circle"></i> Files under 10MB use fast upload. Files over 10MB are permanently stored.
       </div>
       
       <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
@@ -133,6 +135,9 @@
           continue;
         }
         
+        const TEN_MB = 10 * 1024 * 1024;
+        const uploadEndpoint = file.size > TEN_MB ? '/api/upload/large' : '/api/upload';
+        
         const formData = new FormData();
         formData.append('file', file);
         
@@ -155,13 +160,12 @@
             if (xhr.status === 200) {
               const response = JSON.parse(xhr.responseText);
               if (response.success) {
-                if (response.storageType === 'disk') {
-                  console.log('[v0] Large file stored permanently on server');
-                }
-                addFileToList(file.name, file.size, response.downloadSlug, response.storageType);
+                const isLargeFile = file.size > TEN_MB;
+                addFileToList(file.name, file.size, response.downloadSlug, isLargeFile);
                 progressDiv.style.display = 'none';
               } else {
                 alert('Upload failed: ' + response.message);
+                progressDiv.style.display = 'none';
               }
             }
           });
@@ -171,8 +175,8 @@
             progressDiv.style.display = 'none';
           });
           
-          xhr.open('POST', '/api/upload');
-          xhr.withCredentials = true; // Send cookies with XHR
+          xhr.open('POST', uploadEndpoint);
+          xhr.withCredentials = true;
           xhr.send(formData);
         } catch (err) {
           alert('Upload failed: ' + err.message);
@@ -189,22 +193,22 @@
       return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     }
 
-    function addFileToList(name, size, slug, storageType) {
+    function addFileToList(name, size, slug, isPermanent) {
       const fileList = document.getElementById('file-list');
       if (fileList.innerHTML === '') {
         fileList.innerHTML = '<h3><i class="fas fa-check-circle" style="color: #51cf66; margin-right: 8px;"></i>Uploaded Files</h3>';
       }
       
-      const storageIcon = storageType === 'disk' 
-        ? '<i class="fas fa-hdd" style="color: #51cf66; margin-left: 8px;" title="Permanently stored on server"></i>' 
-        : '<i class="fas fa-database" style="color: #888; margin-left: 8px;" title="Database storage"></i>';
+      const storageInfo = isPermanent 
+        ? '<span style="color: #51cf66; font-size: 11px;"><i class="fas fa-hdd"></i> Permanent Storage</span>' 
+        : '<span style="color: #888; font-size: 11px;"><i class="fas fa-database"></i> Fast Storage</span>';
       
       const item = document.createElement('div');
       item.className = 'file-item';
       item.innerHTML = `
         <div class="file-info">
-          <div class="file-name"><i class="fas fa-file"></i> ${name} ${storageIcon}</div>
-          <div class="file-size">${formatSize(size)}</div>
+          <div class="file-name"><i class="fas fa-file"></i> ${name}</div>
+          <div class="file-size">${formatSize(size)} • ${storageInfo}</div>
         </div>
         <button class="btn-copy" onclick="copyLink('${slug}')"><i class="fas fa-copy"></i> Copy Link</button>
       `;
