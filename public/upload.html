@@ -76,7 +76,7 @@
       <h2><i class="fas fa-cloud-upload-alt"></i> Upload Your Files</h2>
       
       <div class="upload-info">
-        <i class="fas fa-info-circle"></i> Maximum 5GB per file.
+        <i class="fas fa-info-circle"></i> Maximum 5GB per file. Files larger than 10MB are stored permanently.
       </div>
       
       <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
@@ -155,7 +155,10 @@
             if (xhr.status === 200) {
               const response = JSON.parse(xhr.responseText);
               if (response.success) {
-                addFileToList(file.name, file.size, response.downloadSlug);
+                if (response.storageType === 'disk') {
+                  console.log('[v0] Large file stored permanently on server');
+                }
+                addFileToList(file.name, file.size, response.downloadSlug, response.storageType);
                 progressDiv.style.display = 'none';
               } else {
                 alert('Upload failed: ' + response.message);
@@ -186,17 +189,21 @@
       return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     }
 
-    function addFileToList(name, size, slug) {
+    function addFileToList(name, size, slug, storageType) {
       const fileList = document.getElementById('file-list');
       if (fileList.innerHTML === '') {
         fileList.innerHTML = '<h3><i class="fas fa-check-circle" style="color: #51cf66; margin-right: 8px;"></i>Uploaded Files</h3>';
       }
       
+      const storageIcon = storageType === 'disk' 
+        ? '<i class="fas fa-hdd" style="color: #51cf66; margin-left: 8px;" title="Permanently stored on server"></i>' 
+        : '<i class="fas fa-database" style="color: #888; margin-left: 8px;" title="Database storage"></i>';
+      
       const item = document.createElement('div');
       item.className = 'file-item';
       item.innerHTML = `
         <div class="file-info">
-          <div class="file-name"><i class="fas fa-file"></i> ${name}</div>
+          <div class="file-name"><i class="fas fa-file"></i> ${name} ${storageIcon}</div>
           <div class="file-size">${formatSize(size)}</div>
         </div>
         <button class="btn-copy" onclick="copyLink('${slug}')"><i class="fas fa-copy"></i> Copy Link</button>
