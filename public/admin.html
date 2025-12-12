@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - NexDrop</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --primary: #e53935; --dark: #0a0a0a; --light: #ffffff; --gray: #1a1a1a; }
@@ -39,8 +40,8 @@
 </head>
 <body>
   <header>
-    <h1>🔥 NexDrop - Admin Panel</h1>
-    <a href="/" style="color: var(--light); text-decoration: none;">← Back to Home</a>
+    <h1><i class="fas fa-fire"></i> NexDrop - Admin Panel</h1>
+    <a href="/dashboard" style="color: var(--light); text-decoration: none;"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
   </header>
 
   <div class="container">
@@ -107,10 +108,12 @@
         const response = await fetch('/api/user/profile');
         const data = await response.json();
         if (!data.success || !data.user.isAdmin) {
-          window.location.href = '/';
+          alert('Access denied. Admin login required.');
+          window.location.href = '/login';
         }
       } catch (err) {
-        window.location.href = '/';
+        alert('Authentication error. Please login.');
+        window.location.href = '/login';
       }
     }
 

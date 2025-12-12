@@ -35,6 +35,14 @@
   <div class="container">
     <h1>⚡ HIDDEN ADMIN INTERFACE ⚡</h1>
     
+    <!-- Added authentication check message -->
+    <div class="section">
+      <h2>🔐 Authentication Status</h2>
+      <div class="code-block">
+        <code id="auth-status">Verifying admin credentials...</code>
+      </div>
+    </div>
+
     <div class="section">
       <h2>🔒 System Status</h2>
       <div class="stat-row">
@@ -108,6 +116,27 @@ MAX_FILE_SIZE: 5GB<br>
   </div>
 
   <script>
+    async function verifyAdminAccess() {
+      try {
+        const response = await fetch('/api/user/profile');
+        const data = await response.json();
+        if (!data.success || !data.user.isAdmin) {
+          alert('Access denied. Admin authentication required.');
+          window.location.href = '/login';
+          return;
+        }
+        document.getElementById('auth-status').innerHTML = 
+          '<span style="color: #51cf66;">✓ Admin access verified</span><br>' +
+          'User: ' + data.user.username + '<br>' +
+          'Role: Administrator';
+      } catch (err) {
+        alert('Authentication error. Please login.');
+        window.location.href = '/login';
+      }
+    }
+
+    verifyAdminAccess();
+
     async function loadHiddenAdminInfo() {
       // Simulate system info
       document.getElementById('server-time').textContent = new Date().toLocaleTimeString();
