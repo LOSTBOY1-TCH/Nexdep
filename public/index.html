@@ -33,6 +33,10 @@
     .btn-signup { background: var(--primary); color: var(--dark); box-shadow: 0 0 15px rgba(229, 57, 53, 0.4); }
     .btn-signup:hover { box-shadow: 0 0 25px rgba(229, 57, 53, 0.7); }
     
+    /* Added WhatsApp channel button styles */
+    .btn-whatsapp { background: #25D366; color: white; padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; transition: all 0.3s; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-whatsapp:hover { box-shadow: 0 0 20px rgba(37, 211, 102, 0.6); transform: scale(1.05); }
+    
     .hero { text-align: center; padding: 60px 20px; animation: fadeIn 0.8s ease; }
     .hero h2 { font-size: clamp(32px, 5vw, 48px); margin-bottom: 15px; color: var(--light); }
     .hero p { font-size: clamp(16px, 3vw, 18px); color: #aaa; margin-bottom: 30px; }
@@ -80,6 +84,8 @@
     <nav>
       <a href="/">Home</a>
       <a href="/leaderboard">Leaderboard</a>
+      <!-- Added WhatsApp channel button in navigation -->
+      <a href="https://whatsapp.com/channel/0029VbBcQhKB4hdXeoNOW41Y" target="_blank" class="btn-whatsapp"><i class="fab fa-whatsapp"></i> Join Channel</a>
       <div class="auth-buttons" id="auth-buttons" style="display: flex;">
         <button class="btn-nav btn-login" onclick="window.location.href='/login'"><i class="fas fa-sign-in-alt"></i> Login</button>
         <button class="btn-nav btn-signup" onclick="window.location.href='/signup'"><i class="fas fa-user-plus"></i> Sign Up</button>
