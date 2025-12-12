@@ -39,18 +39,24 @@ app.use(
 let db
 let gridFSBucket
 
-mongoose
-  .connect(process.env.MONGODB_URI || "mongodb://localhost:27017/nexdrop", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => {
-    console.log("MongoDB connected")
+async function connectDatabase() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/nexdrop", {
+      serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
+      socketTimeoutMS: 45000,
+      family: 4, // Use IPv4, skip trying IPv6
+    })
+    console.log("MongoDB connected successfully")
     db = mongoose.connection.getClient().db("nexdrop")
     gridFSBucket = new GridFSBucket(db)
-    initializeAdmin()
-  })
-  .catch((err) => console.log("MongoDB connection error:", err))
+    await initializeAdmin()
+    return true
+  } catch (err) {
+    console.error("MongoDB connection error:", err)
+    console.error("Make sure MongoDB is running and MONGODB_URI is correct")
+    process.exit(1) // Exit if database connection fails
+  }
+}
 
 // Schemas
 const userSchema = new mongoose.Schema({
@@ -420,5 +426,10 @@ app.get("/404", (req, res) => res.sendFile(path.join(__dirname, "public/404.html
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "public/404.html")))
 
 // Start Server
-const PORT = process.env.PORT || 3000
-app.listen(PORT, () => console.log(`NexDrop running on http://localhost:${PORT}`))
+async function startServer() {
+  await connectDatabase()
+  const PORT = process.env.PORT || 3000
+  app.listen(PORT, () => console.log(`NexDrop running on http://localhost:${PORT}`))
+}
+
+startServer()
