@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NexDrop - File Hosting</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23e53935' width='100' height='100'/><text x='50' y='65' font-size='60' fill='white' text-anchor='middle' font-weight='bold'>ND</text></svg>">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --primary: #e53935; --dark: #0a0a0a; --light: #ffffff; --gray: #1a1a1a; }
@@ -13,103 +14,115 @@
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 20px rgba(229, 57, 53, 0.3); } 50% { box-shadow: 0 0 40px rgba(229, 57, 53, 0.6); } }
-    @keyframes hoverLift { 0% { transform: translateY(0); } 100% { transform: translateY(-5px); } }
-    @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     
-    header { background: linear-gradient(135deg, var(--dark) 0%, var(--gray) 100%); border-bottom: 2px solid var(--primary); padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; animation: slideDown 0.6s ease; position: relative; z-index: 100; }
-    header h1 { color: var(--primary); font-size: 28px; letter-spacing: 2px; text-shadow: 0 0 10px rgba(229, 57, 53, 0.5); }
-    nav { display: flex; gap: 30px; }
+    header { background: linear-gradient(135deg, var(--dark) 0%, var(--gray) 100%); border-bottom: 2px solid var(--primary); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; animation: slideDown 0.6s ease; position: relative; z-index: 100; flex-wrap: wrap; gap: 15px; }
+    header h1 { color: var(--primary); font-size: 24px; letter-spacing: 2px; text-shadow: 0 0 10px rgba(229, 57, 53, 0.5); display: flex; align-items: center; gap: 8px; }
+    header h1 i { font-size: 28px; }
+    
+    nav { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
     nav a { color: var(--light); text-decoration: none; font-size: 14px; transition: all 0.3s; position: relative; }
     nav a:hover { color: var(--primary); }
     nav a::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 0; height: 2px; background: var(--primary); transition: width 0.3s; }
     nav a:hover::after { width: 100%; }
     
-    .auth-buttons { display: flex; gap: 15px; }
-    .btn-nav { padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; transition: all 0.3s; }
+    .auth-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-nav { padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; transition: all 0.3s; font-size: 13px; }
     .btn-login { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
     .btn-login:hover { background: var(--primary); color: var(--dark); }
     .btn-signup { background: var(--primary); color: var(--dark); box-shadow: 0 0 15px rgba(229, 57, 53, 0.4); }
     .btn-signup:hover { box-shadow: 0 0 25px rgba(229, 57, 53, 0.7); }
     
-    .hero { text-align: center; padding: 80px 40px; animation: fadeIn 0.8s ease; }
-    .hero h2 { font-size: 48px; margin-bottom: 20px; color: var(--light); }
-    .hero p { font-size: 18px; color: #aaa; margin-bottom: 40px; }
+    .hero { text-align: center; padding: 60px 20px; animation: fadeIn 0.8s ease; }
+    .hero h2 { font-size: clamp(32px, 5vw, 48px); margin-bottom: 15px; color: var(--light); }
+    .hero p { font-size: clamp(16px, 3vw, 18px); color: #aaa; margin-bottom: 30px; }
     
-    .search-bar { max-width: 600px; margin: 0 auto 50px; display: flex; gap: 10px; }
-    .search-bar input { flex: 1; padding: 15px 20px; border: 2px solid var(--gray); background: var(--gray); color: var(--light); border-radius: 8px; font-size: 16px; transition: all 0.3s; }
+    .search-bar { max-width: 600px; margin: 0 auto 40px; display: flex; gap: 10px; padding: 0 20px; flex-wrap: wrap; }
+    .search-bar input { flex: 1; min-width: 200px; padding: 12px 16px; border: 2px solid var(--gray); background: var(--gray); color: var(--light); border-radius: 8px; font-size: 14px; transition: all 0.3s; }
     .search-bar input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 20px rgba(229, 57, 53, 0.3); }
-    .search-bar button { padding: 15px 30px; background: var(--primary); color: var(--dark); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+    .search-bar button { padding: 12px 24px; background: var(--primary); color: var(--dark); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.3s; font-size: 14px; }
     .search-bar button:hover { animation: glowPulse 1.5s infinite; }
     
-    .cta-button { padding: 15px 40px; background: var(--primary); color: var(--dark); border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s; margin: 10px; box-shadow: 0 0 20px rgba(229, 57, 53, 0.4); }
+    .cta-button { padding: 12px 32px; background: var(--primary); color: var(--dark); border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: all 0.3s; margin: 10px; box-shadow: 0 0 20px rgba(229, 57, 53, 0.4); }
     .cta-button:hover { animation: glowPulse 1.5s infinite; transform: scale(1.05); }
     
-    .files-section { padding: 40px; max-width: 1200px; margin: 0 auto; }
-    .files-section h3 { margin-bottom: 30px; font-size: 28px; color: var(--primary); }
-    .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+    .files-section { padding: 40px 20px; max-width: 1200px; margin: 0 auto; }
+    .files-section h3 { margin-bottom: 30px; font-size: clamp(24px, 4vw, 28px); color: var(--primary); }
+    .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
     
-    .file-card { background: var(--gray); padding: 20px; border-radius: 8px; border: 1px solid #333; transition: all 0.3s; animation: scaleIn 0.4s ease; cursor: pointer; }
-    .file-card:hover { animation: hoverLift 0.3s ease; border-color: var(--primary); box-shadow: 0 0 20px rgba(229, 57, 53, 0.2); }
-    .file-icon { font-size: 48px; margin-bottom: 15px; }
-    .file-name { font-weight: bold; margin-bottom: 10px; word-break: break-all; }
+    .file-card { background: var(--gray); padding: 20px; border-radius: 8px; border: 1px solid #333; transition: all 0.3s; cursor: pointer; }
+    .file-card:hover { border-color: var(--primary); box-shadow: 0 0 20px rgba(229, 57, 53, 0.2); transform: translateY(-5px); }
+    .file-icon { font-size: 40px; margin-bottom: 15px; color: var(--primary); }
+    .file-name { font-weight: bold; margin-bottom: 10px; word-break: break-all; font-size: 14px; }
     .file-size { color: #888; font-size: 12px; margin-bottom: 10px; }
-    .file-downloads { color: var(--primary); font-size: 12px; }
-    .file-card .btn-view { width: 100%; padding: 10px; margin-top: 10px; background: var(--primary); color: var(--dark); border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+    .file-downloads { color: var(--primary); font-size: 12px; margin-bottom: 10px; }
+    .file-card .btn-view { width: 100%; padding: 10px; margin-top: 10px; background: var(--primary); color: var(--dark); border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: all 0.3s; font-size: 13px; }
     .file-card .btn-view:hover { box-shadow: 0 0 15px rgba(229, 57, 53, 0.5); }
     
-    .toast { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: var(--dark); padding: 15px 25px; border-radius: 8px; animation: slideUp 0.4s ease; z-index: 1000; }
-    @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    footer { background: var(--gray); border-top: 2px solid var(--primary); padding: 30px 20px; text-align: center; color: #888; margin-top: 80px; animation: slideUp 0.6s ease; }
+    footer p { font-size: 14px; margin: 5px 0; }
     
-    footer { background: var(--gray); border-top: 2px solid var(--primary); padding: 40px; text-align: center; color: #888; margin-top: 80px; }
-    footer p { font-size: 14px; }
+    @media (max-width: 768px) {
+      header { padding: 12px 15px; gap: 10px; }
+      header h1 { font-size: 20px; }
+      nav { gap: 10px; }
+      nav a { font-size: 12px; }
+      .files-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+      .hero { padding: 40px 15px; }
+      .search-bar { padding: 0 15px; }
+      .files-section { padding: 20px 15px; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>🔥 NexDrop</h1>
+    <h1><i class="fas fa-fire"></i>NexDrop</h1>
     <nav>
       <a href="/">Home</a>
       <a href="/leaderboard">Leaderboard</a>
       <div class="auth-buttons" id="auth-buttons">
-        <button class="btn-nav btn-login" onclick="window.location.href='/login'">Login</button>
-        <button class="btn-nav btn-signup" onclick="window.location.href='/signup'">Sign Up</button>
+        <button class="btn-nav btn-login" onclick="window.location.href='/login'"><i class="fas fa-sign-in-alt"></i> Login</button>
+        <button class="btn-nav btn-signup" onclick="window.location.href='/signup'"><i class="fas fa-user-plus"></i> Sign Up</button>
       </div>
-      <div id="user-menu" style="display:none; display: flex; gap: 15px; align-items: center;">
+      <div id="user-menu" style="display:none; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
         <span id="username" style="color: var(--primary); font-weight: bold;"></span>
-        <a href="/profile" style="color: var(--light); text-decoration: none;">Profile</a>
-        <a href="/upload" style="color: var(--light); text-decoration: none;">Upload</a>
-        <button class="btn-nav btn-login" onclick="logout()">Logout</button>
+        <a href="/profile"><i class="fas fa-user-circle"></i> Profile</a>
+        <a href="/upload"><i class="fas fa-cloud-upload-alt"></i> Upload</a>
+        <button class="btn-nav btn-login" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
       </div>
     </nav>
   </header>
 
   <div class="hero">
-    <h2>Share Files Instantly</h2>
+    <h2><i class="fas fa-share-alt"></i> Share Files Instantly</h2>
     <p>Fast, secure file hosting with unlimited downloads</p>
     <div class="search-bar">
       <input type="text" id="search-input" placeholder="Search files...">
-      <button onclick="searchFiles()">Search</button>
+      <button onclick="searchFiles()"><i class="fas fa-search"></i> Search</button>
     </div>
-    <button class="cta-button" onclick="window.location.href='/upload'">Upload Now</button>
+    <button class="cta-button" onclick="window.location.href='/upload'"><i class="fas fa-upload"></i> Upload Now</button>
   </div>
 
   <div class="files-section">
-    <h3>Recent Files</h3>
+    <h3><i class="fas fa-folder"></i> Recent Files</h3>
     <div class="files-grid" id="files-grid"></div>
   </div>
 
   <footer>
-    <p>&copy; 2025 NexDrop. Secure file hosting platform.</p>
+    <p>&copy; 2025 LOSTBOY TECH - NEXOVA</p>
+    <p>Secure file hosting platform</p>
   </footer>
 
   <script>
     const getFileIcon = (mimeType) => {
-      if (mimeType.includes('image')) return '🖼️';
-      if (mimeType.includes('video')) return '🎬';
-      if (mimeType.includes('audio')) return '🎵';
-      if (mimeType.includes('pdf')) return '📄';
-      if (mimeType.includes('zip') || mimeType.includes('compressed')) return '📦';
-      return '📁';
+      if (mimeType.includes('image')) return '<i class="fas fa-image"></i>';
+      if (mimeType.includes('video')) return '<i class="fas fa-film"></i>';
+      if (mimeType.includes('audio')) return '<i class="fas fa-music"></i>';
+      if (mimeType.includes('pdf')) return '<i class="fas fa-file-pdf"></i>';
+      if (mimeType.includes('zip') || mimeType.includes('compressed')) return '<i class="fas fa-file-archive"></i>';
+      if (mimeType.includes('word')) return '<i class="fas fa-file-word"></i>';
+      if (mimeType.includes('sheet')) return '<i class="fas fa-file-excel"></i>';
+      return '<i class="fas fa-file"></i>';
     };
 
     const formatSize = (bytes) => {
@@ -133,7 +146,7 @@
             <div class="file-icon">${getFileIcon(file.mimeType)}</div>
             <div class="file-name">${file.originalName}</div>
             <div class="file-size">${formatSize(file.size)}</div>
-            <div class="file-downloads">📥 ${file.downloadCount} downloads</div>
+            <div class="file-downloads"><i class="fas fa-download"></i> ${file.downloadCount} downloads</div>
             <button class="btn-view" onclick="window.location.href='/file/${file.downloadSlug}'">View</button>
           `;
           grid.appendChild(card);
@@ -157,7 +170,7 @@
             <div class="file-icon">${getFileIcon(file.mimeType)}</div>
             <div class="file-name">${file.originalName}</div>
             <div class="file-size">${formatSize(file.size)}</div>
-            <div class="file-downloads">📥 ${file.downloadCount} downloads</div>
+            <div class="file-downloads"><i class="fas fa-download"></i> ${file.downloadCount} downloads</div>
             <button class="btn-view" onclick="window.location.href='/file/${file.downloadSlug}'">View</button>
           `;
           grid.appendChild(card);
@@ -176,7 +189,7 @@
           document.getElementById('user-menu').style.display = 'flex';
           document.getElementById('username').textContent = data.user.username;
           if (data.user.isAdmin) {
-            document.getElementById('user-menu').innerHTML += '<a href="/admin" style="color: var(--primary); font-weight: bold; text-decoration: none;">Admin</a>';
+            document.getElementById('user-menu').innerHTML += '<a href="/_hidden_nexdrop_admin_9834" style="color: var(--primary); font-weight: bold; text-decoration: none;"><i class="fas fa-tools"></i> Admin</a>';
           }
         }
       } catch (err) {
@@ -189,7 +202,6 @@
       window.location.href = '/';
     }
 
-    // Initialize
     checkAuth();
     loadFiles();
     fetch('/api/views');

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>File - NexDrop</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --primary: #e53935; --dark: #0a0a0a; --light: #ffffff; --gray: #1a1a1a; }
@@ -12,17 +13,19 @@
     @keyframes pulseButton { 0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(229, 57, 53, 0.3); } 50% { transform: scale(1.05); box-shadow: 0 0 40px rgba(229, 57, 53, 0.6); } }
     
     .container { max-width: 600px; width: 100%; background: var(--gray); padding: 60px 40px; border-radius: 12px; border: 2px solid var(--primary); }
-    .container h1 { text-align: center; margin-bottom: 30px; color: var(--primary); }
+    .container h1 { text-align: center; margin-bottom: 30px; color: var(--primary); font-size: clamp(20px, 4vw, 28px); }
+    .container h1 i { margin-right: 10px; }
     
-    .file-icon { font-size: 96px; text-align: center; margin-bottom: 30px; }
+    .file-icon { font-size: 96px; text-align: center; margin-bottom: 30px; color: var(--primary); }
     
     .file-info { background: var(--dark); padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #333; }
-    .info-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px; }
-    .info-label { color: #888; }
-    .info-value { color: var(--light); font-weight: bold; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .info-label { color: #888; display: flex; align-items: center; gap: 6px; }
+    .info-label i { color: var(--primary); }
+    .info-value { color: var(--light); font-weight: bold; text-align: right; }
     
-    .buttons { display: flex; gap: 15px; }
-    .btn-download, .btn-copy { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+    .buttons { display: flex; gap: 15px; flex-wrap: wrap; }
+    .btn-download, .btn-copy { flex: 1; min-width: 150px; padding: 15px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .btn-download { background: var(--primary); color: var(--dark); }
     .btn-download:hover { animation: pulseButton 1.5s infinite; }
     .btn-copy { background: #333; color: var(--light); border: 2px solid var(--primary); }
@@ -30,52 +33,76 @@
     
     .preview { margin-top: 30px; text-align: center; }
     .preview img { max-width: 100%; border-radius: 8px; border: 2px solid var(--primary); }
+    
+    .home-link { text-align: center; margin-top: 30px; }
+    .home-link a { color: var(--primary); text-decoration: none; transition: all 0.3s; }
+    .home-link a:hover { color: var(--light); }
+    
+    @media (max-width: 480px) {
+      .container { padding: 40px 20px; }
+      .buttons { flex-direction: column; }
+      .btn-download, .btn-copy { width: 100%; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>📥 Download File</h1>
-    <div class="file-icon" id="file-icon">📁</div>
+    <h1><i class="fas fa-download"></i>Download File</h1>
+    <div class="file-icon" id="file-icon"><i class="fas fa-file"></i></div>
     <div class="file-info">
       <div class="info-row">
-        <span class="info-label">File Name:</span>
+        <span class="info-label"><i class="fas fa-file-alt"></i> File Name:</span>
         <span class="info-value" id="file-name">Loading...</span>
       </div>
       <div class="info-row">
-        <span class="info-label">File Size:</span>
+        <span class="info-label"><i class="fas fa-database"></i> File Size:</span>
         <span class="info-value" id="file-size">Loading...</span>
       </div>
       <div class="info-row">
-        <span class="info-label">Downloads:</span>
+        <span class="info-label"><i class="fas fa-download"></i> Downloads:</span>
         <span class="info-value" id="download-count">0</span>
       </div>
       <div class="info-row">
-        <span class="info-label">Uploaded By:</span>
+        <span class="info-label"><i class="fas fa-user"></i> Uploaded By:</span>
         <span class="info-value" id="uploader">Unknown</span>
       </div>
       <div class="info-row">
-        <span class="info-label">Upload Date:</span>
+        <span class="info-label"><i class="fas fa-calendar"></i> Upload Date:</span>
         <span class="info-value" id="upload-date">Unknown</span>
       </div>
     </div>
     <div class="buttons">
-      <button class="btn-download" onclick="downloadFile()">⬇️ Download</button>
-      <button class="btn-copy" onclick="copyLink()">📋 Copy Link</button>
+      <button class="btn-download" onclick="downloadFile()"><i class="fas fa-cloud-download-alt"></i> Download</button>
+      <button class="btn-copy" onclick="copyLink()"><i class="fas fa-copy"></i> Copy Link</button>
     </div>
     <div class="preview" id="preview"></div>
+    <div class="home-link">
+      <a href="/"><i class="fas fa-arrow-left"></i> Back to Home</a>
+    </div>
   </div>
 
   <script>
     const slug = window.location.pathname.split('/').pop();
     
     const getFileIcon = (mimeType) => {
-      if (mimeType.includes('image')) return '🖼️';
-      if (mimeType.includes('video')) return '🎬';
-      if (mimeType.includes('audio')) return '🎵';
-      if (mimeType.includes('pdf')) return '📄';
-      if (mimeType.includes('zip')) return '📦';
-      return '📁';
+      if (mimeType.includes('image')) return '<i class="fas fa-image"></i>';
+      if (mimeType.includes('video')) return '<i class="fas fa-film"></i>';
+      if (mimeType.includes('audio')) return '<i class="fas fa-music"></i>';
+      if (mimeType.includes('pdf')) return '<i class="fas fa-file-pdf"></i>';
+      if (mimeType.includes('zip') || mimeType.includes('compressed')) return '<i class="fas fa-file-archive"></i>';
+      if (mimeType.includes('word')) return '<i class="fas fa-file-word"></i>';
+      if (mimeType.includes('sheet')) return '<i class="fas fa-file-excel"></i>';
+      if (mimeType.includes('text')) return '<i class="fas fa-file-alt"></i>';
+      return '<i class="fas fa-file"></i>';
     };
+
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
 
     async function loadFileInfo() {
       try {
@@ -83,17 +110,18 @@
         const file = await response.json();
         
         document.getElementById('file-name').textContent = file.originalName;
-        document.getElementById('file-size').textContent = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+        document.getElementById('file-size').textContent = formatSize(file.size);
         document.getElementById('download-count').textContent = file.downloadCount;
         document.getElementById('uploader').textContent = file.uploaderName;
         document.getElementById('upload-date').textContent = new Date(file.uploadDate).toLocaleDateString();
-        document.getElementById('file-icon').textContent = getFileIcon(file.mimeType);
+        document.getElementById('file-icon').innerHTML = getFileIcon(file.mimeType);
         
         if (file.mimeType.includes('image')) {
           document.getElementById('preview').innerHTML = `<img src="/api/download/${slug}" alt="Preview">`;
         }
       } catch (err) {
         console.error('Error loading file:', err);
+        document.getElementById('file-name').textContent = 'File not found';
       }
     }
 
@@ -103,8 +131,11 @@
 
     function copyLink() {
       const link = window.location.href;
-      navigator.clipboard.writeText(link);
-      alert('Link copied to clipboard!');
+      navigator.clipboard.writeText(link).then(() => {
+        alert('Link copied to clipboard!');
+      }).catch(() => {
+        alert('Failed to copy link');
+      });
     }
 
     loadFileInfo();
