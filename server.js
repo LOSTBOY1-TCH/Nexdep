@@ -230,7 +230,6 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 
     uploadStream.on("error", (err) => {
       console.error("Upload stream error:", err)
-      // Delete metadata if upload fails
       FileMetadata.findByIdAndDelete(fileMetadata._id).catch(console.error)
     })
 
@@ -309,12 +308,11 @@ app.get("/api/admin/stats", async (req, res) => {
       SiteStats.findOne(),
     ])
 
-    const stats = {
+    res.json({
       totalUsers,
       totalFiles,
-      totalViews: siteStats || { totalViews: 0 },
-    }
-    res.json(stats)
+      totalViews: siteStats ? siteStats.totalViews : 0,
+    })
   } catch (err) {
     res.json({ error: err.message })
   }
@@ -390,34 +388,6 @@ app.get("/api/admin/leaderboard", async (req, res) => {
 })
 
 // Routes - Public
-app.get("/api/views", async (req, res) => {
-  try {
-    let stats = await SiteStats.findOne()
-    if (!stats) {
-      stats = await SiteStats.create({ totalViews: 1 })
-    } else {
-      stats.totalViews += 1
-      await stats.save()
-    }
-    res.json({ views: stats.totalViews })
-  } catch (err) {
-    res.json({ error: err.message })
-  }
-})
-
-app.get("/api/search", async (req, res) => {
-  try {
-    const query = req.query.q || ""
-    const files = await FileMetadata.find({
-      $or: [{ originalName: { $regex: query, $options: "i" } }, { tags: { $in: [new RegExp(query, "i")] } }],
-    })
-    res.json(files)
-  } catch (err) {
-    res.json({ error: err.message })
-  }
-})
-
-// Serve HTML pages
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/landing.html"))
 })
