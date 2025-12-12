@@ -303,10 +303,16 @@ app.get("/api/admin/stats", async (req, res) => {
     if (!req.session.userId || !req.session.isAdmin) {
       return res.status(401).json({ success: false, message: "Unauthorized" })
     }
+    const [totalUsers, totalFiles, siteStats] = await Promise.all([
+      User.countDocuments(),
+      FileMetadata.countDocuments(),
+      SiteStats.findOne(),
+    ])
+
     const stats = {
-      totalUsers: await User.countDocuments(),
-      totalFiles: await FileMetadata.countDocuments(),
-      totalViews: (await SiteStats.findOne()) || { totalViews: 0 },
+      totalUsers,
+      totalFiles,
+      totalViews: siteStats || { totalViews: 0 },
     }
     res.json(stats)
   } catch (err) {
