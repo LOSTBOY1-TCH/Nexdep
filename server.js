@@ -9,23 +9,24 @@ const session = require("express-session")
 require("dotenv").config()
 
 const app = express()
-
 const uploadDir = path.join(__dirname, "uploads")
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true })
 }
 
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir)
   },
   filename: (req, file, cb) => {
-    const uniqueName = crypto.randomBytes(16).toString("hex") + path.extname(file.originalname)
-    cb(null, uniqueName)
+    const downloadSlug = crypto.randomBytes(16).toString("hex")
+    req.downloadSlug = downloadSlug // Store for later use
+    cb(null, downloadSlug)
   },
 })
 
-const upload = multer({ storage: storage })
+const uploadMemory = multer({ storage: multer.memoryStorage() })
+const uploadDisk = multer({ storage: diskStorage })
 
 // Middleware
 app.use(express.static("public"))
@@ -94,8 +95,7 @@ const fileMetadataSchema = new mongoose.Schema({
   downloadSlug: { type: String, unique: true },
   visibility: { type: String, default: "public" },
   tags: [String],
-  storageType: { type: String, enum: ["gridfs", "disk"], default: "gridfs" }, // New field
-  filePath: String, // New field for disk storage path
+  storageType: { type: String, enum: ["gridfs", "disk"], default: "gridfs" },
 })
 
 const User = mongoose.model("User", userSchema)
@@ -215,7 +215,7 @@ app.get("/api/auth/check", (req, res) => {
 })
 
 // Routes - File Operations
-app.post("/api/upload", upload.single("file"), async (req, res) => {
+app.post("/api/upload/small", uploadMemory.single("file"), async (req, res) => {
   try {
     if (!req.session.userId) {
       return res.json({ success: false, message: "Not authenticated" })
@@ -223,23 +223,21 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     if (!req.file) {
       return res.json({ success: false, message: "No file provided" })
     }
-    const MAX_SIZE = 5 * 1024 * 1024 * 1024 // 5GB
+    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
     if (req.file.size > MAX_SIZE) {
-      // Clean up the uploaded file
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path)
-      }
-      return res.json({ success: false, message: "File exceeds 5GB limit" })
+      return res.json({
+        success: false,
+        message: "File exceeds 10MB limit for this upload method. Use large file upload.",
+      })
+    }
+    if (req.file.buffer.length > MAX_SIZE) {
+      return res.json({ success: false, message: "File exceeds 10MB limit" })
     }
 
     const downloadSlug = crypto.randomBytes(16).toString("hex")
-    const TEN_MB = 10 * 1024 * 1024
-
-    // Determine storage type based on file size
-    const storageType = req.file.size > TEN_MB ? "disk" : "gridfs"
 
     const fileMetadata = await FileMetadata.create({
-      filename: storageType === "disk" ? req.file.filename : downloadSlug,
+      filename: downloadSlug,
       originalName: req.file.originalname,
       uploaderId: req.session.userId,
       uploaderName: req.session.username,
@@ -247,50 +245,119 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       mimeType: req.file.mimetype,
       downloadSlug,
       visibility: "public",
-      storageType,
-      filePath: storageType === "disk" ? req.file.path : null,
+      storageType: "gridfs",
     })
 
-    if (storageType === "gridfs") {
-      // For files < 10MB, read from disk and store in GridFS
-      const fileBuffer = fs.readFileSync(req.file.path)
+    res.json({ success: true, downloadSlug, actualSize: req.file.size })
 
-      const uploadStream = gridFSBucket.openUploadStream(downloadSlug, {
-        metadata: { originalName: req.file.originalname },
-      })
-
-      uploadStream.on("error", (err) => {
-        console.error("Upload stream error:", err)
-        FileMetadata.findByIdAndDelete(fileMetadata._id).catch(console.error)
-      })
-
-      uploadStream.on("finish", () => {
-        // Delete the temporary file after uploading to GridFS
-        if (fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path)
-        }
-      })
-
-      uploadStream.end(fileBuffer)
-    }
-    // For files > 10MB, they stay on disk (already saved by multer)
-
-    console.log(`[v0] File uploaded: ${req.file.originalname}, Size: ${req.file.size} bytes, Storage: ${storageType}`)
-
-    res.json({
-      success: true,
-      downloadSlug,
-      actualSize: req.file.size,
-      storageType,
-      message: storageType === "disk" ? "File stored permanently on server" : "File uploaded successfully",
+    const uploadStream = gridFSBucket.openUploadStream(downloadSlug, {
+      metadata: { originalName: req.file.originalname },
     })
+
+    uploadStream.on("error", (err) => {
+      console.error("Upload stream error:", err)
+      FileMetadata.findByIdAndDelete(fileMetadata._id).catch(console.error)
+    })
+
+    uploadStream.end(req.file.buffer)
   } catch (err) {
-    // Clean up file on error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path)
+    res.json({ success: false, message: err.message })
+  }
+})
+
+app.post("/api/upload/large", uploadDisk.single("file"), async (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.json({ success: false, message: "Not authenticated" })
+    }
+    if (!req.file) {
+      return res.json({ success: false, message: "No file provided" })
+    }
+
+    const downloadSlug = req.downloadSlug || req.file.filename
+
+    const fileMetadata = await FileMetadata.create({
+      filename: downloadSlug,
+      originalName: req.file.originalname,
+      uploaderId: req.session.userId,
+      uploaderName: req.session.username,
+      size: req.file.size,
+      mimeType: req.file.mimetype,
+      downloadSlug,
+      visibility: "public",
+      storageType: "disk",
+    })
+
+    res.json({ success: true, downloadSlug, actualSize: req.file.size })
+  } catch (err) {
+    // Clean up file if database save fails
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, (unlinkErr) => {
+        if (unlinkErr) console.error("Error deleting file:", unlinkErr)
+      })
     }
     res.json({ success: false, message: err.message })
   }
+})
+
+app.post("/api/upload", (req, res, next) => {
+  // Use multer to parse the request first
+  uploadMemory.single("file")(req, res, async (err) => {
+    if (err) {
+      return res.json({ success: false, message: err.message })
+    }
+
+    if (!req.file) {
+      return res.json({ success: false, message: "No file provided" })
+    }
+
+    const TEN_MB = 10 * 1024 * 1024
+
+    // If file is small enough, process with GridFS
+    if (req.file.size <= TEN_MB) {
+      try {
+        if (!req.session.userId) {
+          return res.json({ success: false, message: "Not authenticated" })
+        }
+
+        const downloadSlug = crypto.randomBytes(16).toString("hex")
+
+        const fileMetadata = await FileMetadata.create({
+          filename: downloadSlug,
+          originalName: req.file.originalname,
+          uploaderId: req.session.userId,
+          uploaderName: req.session.username,
+          size: req.file.size,
+          mimeType: req.file.mimetype,
+          downloadSlug,
+          visibility: "public",
+          storageType: "gridfs",
+        })
+
+        res.json({ success: true, downloadSlug, actualSize: req.file.size })
+
+        const uploadStream = gridFSBucket.openUploadStream(downloadSlug, {
+          metadata: { originalName: req.file.originalname },
+        })
+
+        uploadStream.on("error", (err) => {
+          console.error("Upload stream error:", err)
+          FileMetadata.findByIdAndDelete(fileMetadata._id).catch(console.error)
+        })
+
+        uploadStream.end(req.file.buffer)
+      } catch (err) {
+        res.json({ success: false, message: err.message })
+      }
+    } else {
+      // File is too large for memory, tell client to use large upload endpoint
+      res.json({
+        success: false,
+        useLargeUpload: true,
+        message: "File exceeds 10MB. Please use the large file upload method.",
+      })
+    }
+  })
 })
 
 app.get("/api/download/:slug", async (req, res) => {
@@ -307,18 +374,18 @@ app.get("/api/download/:slug", async (req, res) => {
     await FileMetadata.updateOne({ _id: metadata._id }, { $inc: { downloadCount: 1 } })
 
     if (metadata.storageType === "disk") {
-      // Stream from disk for large files
-      if (!fs.existsSync(metadata.filePath)) {
+      const filePath = path.join(uploadDir, metadata.filename)
+      if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: "File not found on disk" })
       }
-      const fileStream = fs.createReadStream(metadata.filePath)
+      const fileStream = fs.createReadStream(filePath)
       fileStream.on("error", (err) => {
-        console.error("File stream error:", err)
+        console.error("File read error:", err)
         res.status(500).json({ error: "Download error" })
       })
       fileStream.pipe(res)
     } else {
-      // Stream from GridFS for small files
+      // GridFS storage
       const downloadStream = gridFSBucket.openDownloadStreamByName(req.params.slug)
       downloadStream.on("error", (err) => {
         console.error("Download stream error:", err)
@@ -413,26 +480,18 @@ app.delete("/api/admin/file/:id", async (req, res) => {
     if (!req.session.userId || !req.session.isAdmin) {
       return res.status(401).json({ success: false, message: "Unauthorized" })
     }
-    const metadata = await FileMetadata.findById(req.params.id)
+    const metadata = await FileMetadata.findByIdAndDelete(req.params.id)
     if (metadata) {
-      if (metadata.storageType === "gridfs") {
-        // Only delete GridFS files (< 10MB)
-        try {
-          const files = await db.collection("fs.files").find({ filename: metadata.filename }).toArray()
-          if (files.length > 0) {
-            await gridFSBucket.delete(files[0]._id)
-          }
-        } catch (err) {
-          console.error("GridFS delete error:", err)
-        }
+      if (metadata.storageType === "disk") {
+        const filePath = path.join(uploadDir, metadata.filename)
+        fs.unlink(filePath, (err) => {
+          if (err) console.error("Error deleting file from disk:", err)
+        })
       } else {
-        // Files > 10MB stored on disk are NOT deleted - they remain permanent
-        console.log(`[v0] Skipping deletion of disk file: ${metadata.originalName} (permanent storage)`)
+        gridFSBucket.delete(new mongoose.Types.ObjectId(metadata._id))
       }
-      // Delete metadata from database
-      await FileMetadata.findByIdAndDelete(req.params.id)
     }
-    res.json({ success: true, message: "File record deleted (large files remain on disk)" })
+    res.json({ success: true })
   } catch (err) {
     res.json({ error: err.message })
   }
