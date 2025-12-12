@@ -152,6 +152,18 @@ app.get("/api/logout", (req, res) => {
   res.json({ success: true })
 })
 
+app.get("/api/auth/check", (req, res) => {
+  if (req.session.userId) {
+    res.json({
+      authenticated: true,
+      username: req.session.username,
+      isAdmin: req.session.isAdmin || false,
+    })
+  } else {
+    res.json({ authenticated: false })
+  }
+})
+
 // Routes - File Operations
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   try {
