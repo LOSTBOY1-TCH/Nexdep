@@ -96,19 +96,6 @@
   <script>
     async function loadProfile() {
       try {
-        // First check if user is authenticated
-        const authResponse = await fetch('/api/auth/check', {
-          credentials: 'include' // Added credentials to send session cookies
-        });
-        const authData = await authResponse.json();
-        
-        console.log('[v0] Profile auth check:', authData);
-        
-        if (!authData.authenticated) {
-          alert('You must be signed in to view your profile');
-          window.location.href = '/login';
-          return;
-        }
         
         // Now load profile data
         const response = await fetch('/api/user/profile', {
@@ -123,11 +110,9 @@
           loadUserFiles();
         } else {
           alert('Failed to load profile');
-          window.location.href = '/login';
         }
       } catch (err) {
         console.error('[v0] Profile load failed:', err);
-        window.location.href = '/login';
       }
     }
 
