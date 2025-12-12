@@ -148,16 +148,16 @@ THEME: Red/Black Neon<br>
   <script>
     async function verifyAdminAccess() {
       try {
-        const response = await fetch('/api/user/profile');
+        const response = await fetch('/api/auth/check');
         const data = await response.json();
-        if (!data.success || !data.user.isAdmin) {
+        if (!data.authenticated || !data.isAdmin) {
           alert('Access denied. Admin authentication required.');
           window.location.href = '/login';
           return;
         }
         document.getElementById('auth-status').innerHTML = 
           '<span style="color: #51cf66;"><i class="fas fa-check-circle"></i> Admin access verified</span><br>' +
-          'User: ' + data.user.username + '<br>' +
+          'User: ' + data.username + '<br>' +
           'Role: Administrator<br>' +
           'Access Level: Full Control';
       } catch (err) {

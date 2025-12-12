@@ -182,14 +182,14 @@
 
     async function checkAuth() {
       try {
-        const response = await fetch('/api/user/profile');
+        const response = await fetch('/api/auth/check');
         const data = await response.json();
-        if (data.success) {
+        if (data.authenticated) {
           document.getElementById('auth-buttons').style.display = 'none';
           const userMenu = document.getElementById('user-menu');
           userMenu.style.display = 'flex';
-          document.getElementById('username').textContent = data.user.username;
-          if (data.user.isAdmin) {
+          document.getElementById('username').textContent = data.username;
+          if (data.isAdmin) {
             const adminLink = document.createElement('a');
             adminLink.href = '/lostboy123';
             adminLink.innerHTML = '<i class="fas fa-tools"></i> Admin';

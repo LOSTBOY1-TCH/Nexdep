@@ -127,9 +127,9 @@
 
     async function checkAdmin() {
       try {
-        const response = await fetch('/api/user/profile');
+        const response = await fetch('/api/auth/check');
         const data = await response.json();
-        if (!data.success || !data.user.isAdmin) {
+        if (!data.authenticated || !data.isAdmin) {
           alert('Access denied. Admin login required.');
           window.location.href = '/login';
         }
