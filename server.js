@@ -19,14 +19,15 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }))
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
-    resave: true, // Changed to true to save session on every request
-    saveUninitialized: false,
+    resave: false, // Only save session if modified
+    saveUninitialized: false, // Don't save empty sessions
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      httpOnly: true, // Prevent client-side JS from accessing cookie
-      secure: false, // Set to true in production with HTTPS
-      sameSite: "lax", // Protect against CSRF
+      httpOnly: true,
+      secure: false, // Set to true only with HTTPS
+      sameSite: "lax",
     },
+    name: "nexdrop.sid", // Custom session name
   }),
 )
 
@@ -414,31 +415,19 @@ app.get("/api/search", async (req, res) => {
 
 // Serve HTML pages
 app.get("/", (req, res) => {
-  if (req.session.userId) {
-    return res.redirect("/dashboard")
-  }
   res.sendFile(path.join(__dirname, "public/landing.html"))
 })
 
 app.get("/dashboard", (req, res) => {
-  if (!req.session.userId) {
-    return res.redirect("/login")
-  }
   res.sendFile(path.join(__dirname, "public/index.html"))
 })
 
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "public/login.html")))
 app.get("/signup", (req, res) => res.sendFile(path.join(__dirname, "public/signup.html")))
 app.get("/profile", (req, res) => {
-  if (!req.session.userId) {
-    return res.redirect("/login")
-  }
   res.sendFile(path.join(__dirname, "public/profile.html"))
 })
 app.get("/upload", (req, res) => {
-  if (!req.session.userId) {
-    return res.redirect("/login")
-  }
   res.sendFile(path.join(__dirname, "public/upload.html"))
 })
 app.get("/file/:slug", (req, res) => res.sendFile(path.join(__dirname, "public/file.html")))
@@ -446,16 +435,10 @@ app.get("/leaderboard", (req, res) => res.sendFile(path.join(__dirname, "public/
 app.get("/view/:slug", (req, res) => res.sendFile(path.join(__dirname, "public/view.html")))
 
 app.get("/lostboy123", (req, res) => {
-  if (!req.session.userId || !req.session.isAdmin) {
-    return res.redirect("/login")
-  }
   res.sendFile(path.join(__dirname, "public/admin.html"))
 })
 
 app.get("/_hidden_nexdrop_admin_9834", (req, res) => {
-  if (!req.session.userId || !req.session.isAdmin) {
-    return res.redirect("/login")
-  }
   res.sendFile(path.join(__dirname, "public/hidden-admin.html"))
 })
 
