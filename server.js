@@ -11,6 +11,8 @@ require("dotenv").config()
 const app = express()
 const upload = multer({ storage: multer.memoryStorage() })
 
+app.set("trust proxy", 1)
+
 // Middleware
 app.use(express.static("public"))
 app.use(express.json({ limit: "100mb" }))
@@ -19,15 +21,17 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }))
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
-    resave: false, // Only save session if modified
-    saveUninitialized: false, // Don't save empty sessions
+    resave: false,
+    saveUninitialized: false,
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       httpOnly: true,
-      secure: false, // Set to true only with HTTPS
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
     },
-    name: "nexdrop.sid", // Custom session name
+    name: "nexdrop.sid",
+    rolling: true, // Reset expiration on every request
   }),
 )
 
@@ -155,7 +159,6 @@ app.post("/api/login", async (req, res) => {
       return res.json({ success: false, message: "Your account is banned" })
     }
 
-    // Set session variables
     req.session.userId = user._id
     req.session.username = user.username
     req.session.isAdmin = user.isAdmin
@@ -207,26 +210,28 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     }
 
     const downloadSlug = crypto.randomBytes(16).toString("hex")
+
+    const fileMetadata = await FileMetadata.create({
+      filename: downloadSlug,
+      originalName: req.file.originalname,
+      uploaderId: req.session.userId,
+      uploaderName: req.session.username,
+      size: req.file.size,
+      mimeType: req.file.mimetype,
+      downloadSlug,
+      visibility: "public",
+    })
+
+    res.json({ success: true, downloadSlug, actualSize: req.file.size })
+
     const uploadStream = gridFSBucket.openUploadStream(downloadSlug, {
       metadata: { originalName: req.file.originalname },
     })
 
-    uploadStream.on("finish", async () => {
-      const fileMetadata = await FileMetadata.create({
-        filename: downloadSlug,
-        originalName: req.file.originalname,
-        uploaderId: req.session.userId,
-        uploaderName: req.session.username,
-        size: req.file.size, // Store actual size
-        mimeType: req.file.mimetype,
-        downloadSlug,
-        visibility: "public",
-      })
-      res.json({ success: true, downloadSlug, actualSize: req.file.size })
-    })
-
     uploadStream.on("error", (err) => {
-      res.json({ success: false, message: "Upload stream error: " + err.message })
+      console.error("Upload stream error:", err)
+      // Delete metadata if upload fails
+      FileMetadata.findByIdAndDelete(fileMetadata._id).catch(console.error)
     })
 
     uploadStream.end(req.file.buffer)
