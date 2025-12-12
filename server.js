@@ -257,8 +257,8 @@ app.get("/api/user/files", requireAuth, async (req, res) => {
 // Routes - Admin
 app.get("/api/admin/stats", async (req, res) => {
   try {
-    if (!req.session.isAdmin) {
-      return res.json({ success: false, message: "Unauthorized" })
+    if (!req.session.userId || !req.session.isAdmin) {
+      return res.status(401).json({ success: false, message: "Unauthorized" })
     }
     const stats = {
       totalUsers: await User.countDocuments(),
@@ -273,8 +273,8 @@ app.get("/api/admin/stats", async (req, res) => {
 
 app.get("/api/admin/files", async (req, res) => {
   try {
-    if (!req.session.isAdmin) {
-      return res.json({ success: false, message: "Unauthorized" })
+    if (!req.session.userId || !req.session.isAdmin) {
+      return res.status(401).json({ success: false, message: "Unauthorized" })
     }
     const files = await FileMetadata.find().sort({ uploadDate: -1 })
     res.json(files)
@@ -285,8 +285,8 @@ app.get("/api/admin/files", async (req, res) => {
 
 app.get("/api/admin/users", async (req, res) => {
   try {
-    if (!req.session.isAdmin) {
-      return res.json({ success: false, message: "Unauthorized" })
+    if (!req.session.userId || !req.session.isAdmin) {
+      return res.status(401).json({ success: false, message: "Unauthorized" })
     }
     const users = await User.find().select("-password")
     res.json(users)
@@ -297,8 +297,8 @@ app.get("/api/admin/users", async (req, res) => {
 
 app.delete("/api/admin/file/:id", async (req, res) => {
   try {
-    if (!req.session.isAdmin) {
-      return res.json({ success: false, message: "Unauthorized" })
+    if (!req.session.userId || !req.session.isAdmin) {
+      return res.status(401).json({ success: false, message: "Unauthorized" })
     }
     const metadata = await FileMetadata.findByIdAndDelete(req.params.id)
     if (metadata) {
@@ -312,8 +312,8 @@ app.delete("/api/admin/file/:id", async (req, res) => {
 
 app.post("/api/admin/ban/:id", async (req, res) => {
   try {
-    if (!req.session.isAdmin) {
-      return res.json({ success: false, message: "Unauthorized" })
+    if (!req.session.userId || !req.session.isAdmin) {
+      return res.status(401).json({ success: false, message: "Unauthorized" })
     }
     const { isBanned } = req.body
     await User.findByIdAndUpdate(req.params.id, { isBanned })
@@ -325,8 +325,8 @@ app.post("/api/admin/ban/:id", async (req, res) => {
 
 app.get("/api/admin/leaderboard", async (req, res) => {
   try {
-    if (!req.session.isAdmin) {
-      return res.json({ success: false, message: "Unauthorized" })
+    if (!req.session.userId || !req.session.isAdmin) {
+      return res.status(401).json({ success: false, message: "Unauthorized" })
     }
     const topFiles = await FileMetadata.find().sort({ downloadCount: -1 }).limit(10)
     const topUploaders = await FileMetadata.aggregate([
@@ -369,7 +369,20 @@ app.get("/api/search", async (req, res) => {
 })
 
 // Serve HTML pages
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")))
+app.get("/", (req, res) => {
+  if (req.session.userId) {
+    return res.redirect("/dashboard")
+  }
+  res.sendFile(path.join(__dirname, "public/landing.html"))
+})
+
+app.get("/dashboard", (req, res) => {
+  if (!req.session.userId) {
+    return res.redirect("/login")
+  }
+  res.sendFile(path.join(__dirname, "public/index.html"))
+})
+
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "public/login.html")))
 app.get("/signup", (req, res) => res.sendFile(path.join(__dirname, "public/signup.html")))
 app.get("/profile", (req, res) => {
@@ -387,8 +400,21 @@ app.get("/upload", (req, res) => {
 app.get("/file/:slug", (req, res) => res.sendFile(path.join(__dirname, "public/file.html")))
 app.get("/leaderboard", (req, res) => res.sendFile(path.join(__dirname, "public/leaderboard.html")))
 app.get("/view/:slug", (req, res) => res.sendFile(path.join(__dirname, "public/view.html")))
-app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "public/admin.html")))
-app.get("/_hidden_nexdrop_admin_9834", (req, res) => res.sendFile(path.join(__dirname, "public/hidden-admin.html")))
+
+app.get("/lostboy123", (req, res) => {
+  if (!req.session.userId || !req.session.isAdmin) {
+    return res.redirect("/login")
+  }
+  res.sendFile(path.join(__dirname, "public/admin.html"))
+})
+
+app.get("/_hidden_nexdrop_admin_9834", (req, res) => {
+  if (!req.session.userId || !req.session.isAdmin) {
+    return res.redirect("/login")
+  }
+  res.sendFile(path.join(__dirname, "public/hidden-admin.html"))
+})
+
 app.get("/404", (req, res) => res.sendFile(path.join(__dirname, "public/404.html")))
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "public/404.html")))
 
