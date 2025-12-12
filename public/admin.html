@@ -138,7 +138,7 @@
         
         document.getElementById('total-users').textContent = stats.totalUsers;
         document.getElementById('total-files').textContent = stats.totalFiles;
-        document.getElementById('total-views').textContent = stats.totalViews.totalViews || 0;
+        document.getElementById('total-views').textContent = stats.totalViews || 0;
       } catch (err) {
         console.error('Error loading stats:', err);
         document.getElementById('total-users').textContent = '0';
