@@ -125,24 +125,6 @@
     let allFiles = [];
     let allUsers = [];
 
-    async function checkAdmin() {
-      try {
-        const response = await fetch('/api/auth/check', {
-          credentials: 'include'
-        });
-        const data = await response.json();
-        console.log('[v0] Admin auth check:', data);
-        if (!data.authenticated || !data.isAdmin) {
-          alert('Access denied. Admin login required.');
-          window.location.href = '/login';
-        }
-      } catch (err) {
-        console.error('[v0] Admin auth error:', err);
-        alert('Authentication error. Please login.');
-        window.location.href = '/login';
-      }
-    }
-
     async function loadStats() {
       try {
         const response = await fetch('/api/admin/stats', {
@@ -271,7 +253,6 @@
       }
     }
 
-    checkAdmin();
     loadStats();
     loadFiles();
     loadUsers();
