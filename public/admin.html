@@ -172,15 +172,22 @@
       const tbody = document.getElementById('files-table');
       tbody.innerHTML = '';
       files.forEach(file => {
+        const isPermanent = file.storageType === 'disk';
+        const storageIcon = isPermanent 
+          ? '<i class="fas fa-hdd" style="color: #51cf66; margin-left: 6px;" title="Permanently stored on server"></i>'
+          : '<i class="fas fa-database" style="color: #888; margin-left: 6px;" title="Database storage"></i>';
+        
+        const deleteButton = isPermanent
+          ? '<button class="btn-delete" style="background: #666; cursor: not-allowed;" disabled title="Large files are permanently stored"><i class="fas fa-lock"></i> Permanent</button>'
+          : `<button class="btn-delete" onclick="deleteFile('${file._id}')"><i class="fas fa-trash"></i> Delete</button>`;
+        
         const row = document.createElement('tr');
         row.innerHTML = `
-          <td>${file.originalName}</td>
+          <td>${file.originalName} ${storageIcon}</td>
           <td>${file.uploaderName}</td>
           <td>${formatSize(file.size)}</td>
           <td><i class="fas fa-download"></i> ${file.downloadCount}</td>
-          <td>
-            <button class="btn-delete" onclick="deleteFile('${file._id}')"><i class="fas fa-trash"></i> Delete</button>
-          </td>
+          <td>${deleteButton}</td>
         `;
         tbody.appendChild(row);
       });
@@ -239,6 +246,9 @@
         });
         const data = await response.json();
         if (data.success) {
+          if (data.message) {
+            alert(data.message);
+          }
           loadFiles();
           loadStats();
         }
