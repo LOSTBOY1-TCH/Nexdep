@@ -117,7 +117,7 @@ app.post("/api/signup", async (req, res) => {
     const user = await User.create({ username, email, password: hashedPassword })
     req.session.userId = user._id
     req.session.username = user.username
-    res.json({ success: true, redirect: "/" })
+    res.json({ success: true, redirect: "/dashboard" })
   } catch (err) {
     res.json({ success: false, message: err.message })
   }
@@ -140,7 +140,8 @@ app.post("/api/login", async (req, res) => {
     req.session.userId = user._id
     req.session.username = user.username
     req.session.isAdmin = user.isAdmin
-    res.json({ success: true, redirect: "/" })
+
+    res.json({ success: true, redirect: "/dashboard" })
   } catch (err) {
     res.json({ success: false, message: err.message })
   }
