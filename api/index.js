@@ -11,7 +11,7 @@ const app = express()
 
 const uploadMemory = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
 })
 
 app.use((req, res, next) => {
@@ -62,7 +62,6 @@ async function connectDatabase() {
     cachedDb = mongoose.connection.getClient().db()
     console.log("[v0] MongoDB connected successfully")
 
-    // Initialize admin user
     await initializeAdmin()
 
     return cachedDb
@@ -72,35 +71,42 @@ async function connectDatabase() {
   }
 }
 
-let sessionMiddleware = null
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
 
-function getSessionMiddleware() {
-  if (!sessionMiddleware) {
-    const MONGODB_URI =
-      process.env.MONGODB_URI ||
-      "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
-
-    sessionMiddleware = session({
+const sessionMiddleware = session({
+  secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: MONGODB_URI,
+    touchAfter: 24 * 3600,
+    crypto: {
       secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
-      resave: false,
-      saveUninitialized: false,
-      store: MongoStore.create({
-        mongoUrl: MONGODB_URI,
-        touchAfter: 24 * 3600,
-        crypto: {
-          secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
-        },
-      }),
-      cookie: {
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      },
+    },
+  }),
+  cookie: {
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    path: "/",
+  },
+})
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDatabase()
+    sessionMiddleware(req, res, next)
+  } catch (err) {
+    console.error("[v0] Database connection failed:", err)
+    return res.status(503).json({
+      success: false,
+      error: "Database connection failed. Please check MONGODB_URI environment variable.",
     })
   }
-  return sessionMiddleware
-}
+})
 
 // Schemas
 const userSchema = new mongoose.Schema({
@@ -137,7 +143,7 @@ const FileMetadata = mongoose.models.FileMetadata || mongoose.model("FileMetadat
 const SiteStats = mongoose.models.SiteStats || mongoose.model("SiteStats", siteStatsSchema)
 
 const requireAuth = (req, res, next) => {
-  console.log("[v0] Auth check - Session:", req.session)
+  console.log("[v0] Auth check - Session ID:", req.session?.id)
   console.log("[v0] Auth check - User ID:", req.session?.userId)
 
   if (!req.session || !req.session.userId) {
@@ -165,20 +171,6 @@ async function initializeAdmin() {
   }
 }
 
-app.use(async (req, res, next) => {
-  try {
-    await connectDatabase()
-    // Apply session middleware dynamically
-    getSessionMiddleware()(req, res, next)
-  } catch (err) {
-    console.error("[v0] Database connection failed:", err)
-    return res.status(503).json({
-      success: false,
-      error: "Database connection failed. Please check MONGODB_URI environment variable.",
-    })
-  }
-})
-
 // Auth Routes
 app.post("/api/signup", async (req, res) => {
   try {
@@ -202,12 +194,15 @@ app.post("/api/signup", async (req, res) => {
 
     await new Promise((resolve, reject) => {
       req.session.save((err) => {
-        if (err) reject(err)
-        else resolve()
+        if (err) {
+          console.error("[v0] Session save error:", err)
+          reject(err)
+        } else {
+          console.log("[v0] Signup session saved:", req.session.id, req.session.userId)
+          resolve()
+        }
       })
     })
-
-    console.log("[v0] Signup successful, session saved:", req.session.userId)
 
     res.json({ success: true, redirect: "/dashboard" })
   } catch (err) {
@@ -244,7 +239,7 @@ app.post("/api/login", async (req, res) => {
           console.error("[v0] Session save error:", err)
           reject(err)
         } else {
-          console.log("[v0] Session saved successfully:", req.session.userId)
+          console.log("[v0] Login session saved:", req.session.id, req.session.userId)
           resolve()
         }
       })
@@ -263,7 +258,8 @@ app.get("/api/logout", (req, res) => {
 })
 
 app.get("/api/auth/check", (req, res) => {
-  console.log("[v0] Auth check request - Session:", req.session)
+  console.log("[v0] Auth check - Session ID:", req.session?.id)
+  console.log("[v0] Auth check - User ID:", req.session?.userId)
 
   if (req.session && req.session.userId) {
     res.json({
@@ -279,7 +275,8 @@ app.get("/api/auth/check", (req, res) => {
 // File Upload Routes
 app.post("/api/upload", uploadMemory.single("file"), async (req, res) => {
   try {
-    console.log("[v0] Upload attempt - Session:", req.session)
+    console.log("[v0] Upload attempt - Session ID:", req.session?.id)
+    console.log("[v0] Upload attempt - User ID:", req.session?.userId)
 
     if (!req.session || !req.session.userId) {
       console.log("[v0] Upload failed: Not authenticated")
@@ -472,6 +469,47 @@ app.get("/api/admin/leaderboard", async (req, res) => {
     res.json({ topFiles, topUploaders })
   } catch (err) {
     res.json({ error: err.message })
+  }
+})
+
+app.get("/api/search", async (req, res) => {
+  try {
+    const query = req.query.q || ""
+    let filter = {}
+
+    if (query) {
+      filter = {
+        $or: [
+          { originalName: { $regex: query, $options: "i" } },
+          { uploaderName: { $regex: query, $options: "i" } },
+          { tags: { $regex: query, $options: "i" } },
+        ],
+      }
+    }
+
+    const files = await FileMetadata.find(filter).sort({ uploadDate: -1 }).limit(50)
+
+    res.json(files)
+  } catch (err) {
+    console.error("[v0] Search error:", err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get("/api/views", async (req, res) => {
+  try {
+    let stats = await SiteStats.findOne()
+    if (!stats) {
+      stats = await SiteStats.create({ totalViews: 1 })
+    } else {
+      stats.totalViews += 1
+      stats.lastUpdated = new Date()
+      await stats.save()
+    }
+    res.json({ totalViews: stats.totalViews })
+  } catch (err) {
+    console.error("[v0] Views tracking error:", err)
+    res.status(500).json({ error: err.message })
   }
 })
 
