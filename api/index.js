@@ -21,7 +21,8 @@ app.use((req, res, next) => {
   }
   res.setHeader("Access-Control-Allow-Credentials", "true")
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Cookie")
+  res.setHeader("Access-Control-Expose-Headers", "Set-Cookie")
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(200)
@@ -34,22 +35,25 @@ app.use(express.static(path.join(__dirname, "../public")))
 app.use(express.json({ limit: "100mb" }))
 app.use(express.urlencoded({ limit: "100mb", extended: true }))
 
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
+
 // MongoDB Connection
 let cachedDb = null
 
 async function connectDatabase() {
   if (cachedDb && mongoose.connection.readyState === 1) {
+    console.log("[v0] Using cached database connection")
     return cachedDb
   }
 
   try {
-    const MONGODB_URI =
-      process.env.MONGODB_URI ||
-      "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
-
     if (!MONGODB_URI) {
       throw new Error("MONGODB_URI environment variable is not set")
     }
+
+    console.log("[v0] Connecting to MongoDB...")
 
     await mongoose.connect(MONGODB_URI, {
       maxPoolSize: 10,
@@ -71,26 +75,24 @@ async function connectDatabase() {
   }
 }
 
-const MONGODB_URI =
-  process.env.MONGODB_URI ||
-  "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
-
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
   resave: false,
   saveUninitialized: false,
+  name: "nexdrop.sid", // Custom session cookie name
   store: MongoStore.create({
     mongoUrl: MONGODB_URI,
     touchAfter: 24 * 3600,
     crypto: {
       secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
     },
+    ttl: 7 * 24 * 60 * 60, // 7 days in seconds
   }),
   cookie: {
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
+    secure: process.env.NODE_ENV === "production", // Only secure in production
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // Different for dev/prod
     path: "/",
   },
 })
@@ -98,7 +100,14 @@ const sessionMiddleware = session({
 app.use(async (req, res, next) => {
   try {
     await connectDatabase()
-    sessionMiddleware(req, res, next)
+    sessionMiddleware(req, res, (err) => {
+      if (err) {
+        console.error("[v0] Session middleware error:", err)
+        return res.status(500).json({ success: false, error: "Session initialization failed" })
+      }
+      console.log("[v0] Session initialized - ID:", req.session?.id, "UserID:", req.session?.userId)
+      next()
+    })
   } catch (err) {
     console.error("[v0] Database connection failed:", err)
     return res.status(503).json({
@@ -143,8 +152,10 @@ const FileMetadata = mongoose.models.FileMetadata || mongoose.model("FileMetadat
 const SiteStats = mongoose.models.SiteStats || mongoose.model("SiteStats", siteStatsSchema)
 
 const requireAuth = (req, res, next) => {
+  console.log("[v0] Auth check - Session exists:", !!req.session)
   console.log("[v0] Auth check - Session ID:", req.session?.id)
   console.log("[v0] Auth check - User ID:", req.session?.userId)
+  console.log("[v0] Auth check - Username:", req.session?.username)
 
   if (!req.session || !req.session.userId) {
     console.log("[v0] Auth failed: No session or userId")
@@ -198,7 +209,9 @@ app.post("/api/signup", async (req, res) => {
           console.error("[v0] Session save error:", err)
           reject(err)
         } else {
-          console.log("[v0] Signup session saved:", req.session.id, req.session.userId)
+          console.log("[v0] Signup session saved successfully")
+          console.log("[v0] Session ID:", req.session.id)
+          console.log("[v0] User ID:", req.session.userId)
           resolve()
         }
       })
@@ -215,17 +228,20 @@ app.post("/api/login", async (req, res) => {
   try {
     const { username, password } = req.body
 
-    console.log("[v0] Login attempt:", username)
+    console.log("[v0] Login attempt for username:", username)
 
     const user = await User.findOne({ username })
     if (!user) {
+      console.log("[v0] Login failed: User not found")
       return res.json({ success: false, message: "User not found" })
     }
     const hashedPassword = crypto.createHash("sha256").update(password).digest("hex")
     if (user.password !== hashedPassword) {
+      console.log("[v0] Login failed: Invalid password")
       return res.json({ success: false, message: "Invalid password" })
     }
     if (user.isBanned) {
+      console.log("[v0] Login failed: User is banned")
       return res.json({ success: false, message: "Your account is banned" })
     }
 
@@ -239,12 +255,17 @@ app.post("/api/login", async (req, res) => {
           console.error("[v0] Session save error:", err)
           reject(err)
         } else {
-          console.log("[v0] Login session saved:", req.session.id, req.session.userId)
+          console.log("[v0] Login session saved successfully")
+          console.log("[v0] Session ID:", req.session.id)
+          console.log("[v0] User ID:", req.session.userId)
+          console.log("[v0] Username:", req.session.username)
+          console.log("[v0] Is Admin:", req.session.isAdmin)
           resolve()
         }
       })
     })
 
+    console.log("[v0] Login successful for:", username)
     res.json({ success: true, redirect: "/dashboard" })
   } catch (err) {
     console.error("[v0] Login error:", err)
@@ -253,13 +274,24 @@ app.post("/api/login", async (req, res) => {
 })
 
 app.get("/api/logout", (req, res) => {
-  req.session.destroy()
-  res.json({ success: true })
+  console.log("[v0] Logout - Session ID:", req.session?.id)
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("[v0] Logout error:", err)
+    } else {
+      console.log("[v0] Session destroyed successfully")
+    }
+    res.json({ success: true })
+  })
 })
 
 app.get("/api/auth/check", (req, res) => {
-  console.log("[v0] Auth check - Session ID:", req.session?.id)
-  console.log("[v0] Auth check - User ID:", req.session?.userId)
+  console.log("[v0] Auth check endpoint called")
+  console.log("[v0] Session exists:", !!req.session)
+  console.log("[v0] Session ID:", req.session?.id)
+  console.log("[v0] User ID:", req.session?.userId)
+  console.log("[v0] Username:", req.session?.username)
+  console.log("[v0] Is Admin:", req.session?.isAdmin)
 
   if (req.session && req.session.userId) {
     res.json({
