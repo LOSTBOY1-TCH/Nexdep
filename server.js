@@ -6,10 +6,10 @@ const path = require("path")
 const fs = require("fs")
 const crypto = require("crypto")
 const session = require("express-session")
-require("dotenv").config()
 
 const app = express()
-const uploadDir = path.join(__dirname, "uploads")
+
+const uploadDir = process.env.VERCEL ? "/tmp/uploads" : path.join(__dirname, "uploads")
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true })
 }
@@ -20,7 +20,7 @@ const diskStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const downloadSlug = crypto.randomBytes(16).toString("hex")
-    req.downloadSlug = downloadSlug // Store for later use
+    req.downloadSlug = downloadSlug
     cb(null, downloadSlug)
   },
 })
@@ -39,37 +39,47 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 24 * 60 * 60 * 1000,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
     },
     name: "nexdrop.sid",
-    rolling: true, // Reset expiration on every request
+    rolling: true,
   }),
 )
 
 // MongoDB Connection
 let db
 let gridFSBucket
+let isConnected = false
 
 async function connectDatabase() {
+  if (isConnected && mongoose.connection.readyState === 1) {
+    console.log("Using existing MongoDB connection")
+    return true
+  }
+
   try {
     await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/nexdrop", {
-      serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
+      serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
-      family: 4, // Use IPv4, skip trying IPv6
+      family: 4,
     })
     console.log("MongoDB connected successfully")
     db = mongoose.connection.getClient().db("nexdrop")
     gridFSBucket = new GridFSBucket(db)
+    isConnected = true
     await initializeAdmin()
     return true
   } catch (err) {
     console.error("MongoDB connection error:", err)
     console.error("Make sure MongoDB is running and MONGODB_URI is correct")
-    process.exit(1) // Exit if database connection fails
+    if (!process.env.VERCEL) {
+      process.exit(1)
+    }
+    throw err
   }
 }
 
@@ -101,14 +111,12 @@ const fileMetadataSchema = new mongoose.Schema({
 const User = mongoose.model("User", userSchema)
 const FileMetadata = mongoose.model("FileMetadata", fileMetadataSchema)
 
-// Site Stats Schema
 const siteStatsSchema = new mongoose.Schema({
   totalViews: { type: Number, default: 0 },
   lastUpdated: { type: Date, default: Date.now },
 })
 const SiteStats = mongoose.model("SiteStats", siteStatsSchema)
 
-// Authentication Middleware Function
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: "Not authenticated" })
@@ -116,7 +124,6 @@ const requireAuth = (req, res, next) => {
   next()
 }
 
-// Initialize Admin
 async function initializeAdmin() {
   try {
     const adminExists = await User.findOne({ username: "nex" })
@@ -134,6 +141,15 @@ async function initializeAdmin() {
     console.log("Admin initialization error:", err)
   }
 }
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDatabase()
+    next()
+  } catch (err) {
+    res.status(500).json({ error: "Database connection failed" })
+  }
+})
 
 // Routes - Auth
 app.post("/api/signup", async (req, res) => {
@@ -223,7 +239,7 @@ app.post("/api/upload/small", uploadMemory.single("file"), async (req, res) => {
     if (!req.file) {
       return res.json({ success: false, message: "No file provided" })
     }
-    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+    const MAX_SIZE = 10 * 1024 * 1024
     if (req.file.size > MAX_SIZE) {
       return res.json({
         success: false,
@@ -290,7 +306,6 @@ app.post("/api/upload/large", uploadDisk.single("file"), async (req, res) => {
 
     res.json({ success: true, downloadSlug, actualSize: req.file.size })
   } catch (err) {
-    // Clean up file if database save fails
     if (req.file && req.file.path) {
       fs.unlink(req.file.path, (unlinkErr) => {
         if (unlinkErr) console.error("Error deleting file:", unlinkErr)
@@ -301,7 +316,6 @@ app.post("/api/upload/large", uploadDisk.single("file"), async (req, res) => {
 })
 
 app.post("/api/upload", (req, res, next) => {
-  // Use multer to parse the request first
   uploadMemory.single("file")(req, res, async (err) => {
     if (err) {
       return res.json({ success: false, message: err.message })
@@ -313,7 +327,6 @@ app.post("/api/upload", (req, res, next) => {
 
     const TEN_MB = 10 * 1024 * 1024
 
-    // If file is small enough, process with GridFS
     if (req.file.size <= TEN_MB) {
       try {
         if (!req.session.userId) {
@@ -350,7 +363,6 @@ app.post("/api/upload", (req, res, next) => {
         res.json({ success: false, message: err.message })
       }
     } else {
-      // File is too large for memory, tell client to use large upload endpoint
       res.json({
         success: false,
         useLargeUpload: true,
@@ -385,7 +397,6 @@ app.get("/api/download/:slug", async (req, res) => {
       })
       fileStream.pipe(res)
     } else {
-      // GridFS storage
       const downloadStream = gridFSBucket.openDownloadStreamByName(req.params.slug)
       downloadStream.on("error", (err) => {
         console.error("Download stream error:", err)
@@ -410,7 +421,6 @@ app.get("/api/file/:slug", async (req, res) => {
   }
 })
 
-// Routes - User
 app.get("/api/user/profile", requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId).select("-password")
@@ -429,7 +439,6 @@ app.get("/api/user/files", requireAuth, async (req, res) => {
   }
 })
 
-// Routes - Admin
 app.get("/api/admin/stats", async (req, res) => {
   try {
     if (!req.session.userId || !req.session.isAdmin) {
@@ -527,7 +536,6 @@ app.get("/api/admin/leaderboard", async (req, res) => {
   }
 })
 
-// Routes - Public
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/landing.html"))
 })
@@ -559,11 +567,13 @@ app.get("/_hidden_nexdrop_admin_9834", (req, res) => {
 app.get("/404", (req, res) => res.sendFile(path.join(__dirname, "public/404.html")))
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "public/404.html")))
 
-// Start Server
-async function startServer() {
-  await connectDatabase()
-  const PORT = process.env.PORT || 3000
-  app.listen(PORT, () => console.log(`NexDrop running on http://localhost:${PORT}`))
+if (process.env.VERCEL) {
+  module.exports = app
+} else {
+  async function startServer() {
+    await connectDatabase()
+    const PORT = process.env.PORT || 3000
+    app.listen(PORT, () => console.log(`NexDrop running on http://localhost:${PORT}`))
+  }
+  startServer()
 }
-
-startServer()
