@@ -69,7 +69,11 @@ async function connectDatabase() {
 
   connectionPromise = (async () => {
     try {
-      await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/nexdrop", {
+      const MONGODB_URI =
+        process.env.MONGODB_URI ||
+        "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
+
+      await mongoose.connect(MONGODB_URI, {
         maxPoolSize: 10,
         minPoolSize: 2,
         serverSelectionTimeoutMS: 15000,
@@ -80,7 +84,8 @@ async function connectDatabase() {
         retryReads: true,
       })
       console.log("MongoDB connected successfully")
-      db = mongoose.connection.getClient().db("nexdrop")
+      const dbName = mongoose.connection.name || "nexdrop"
+      db = mongoose.connection.getClient().db(dbName)
       gridFSBucket = new GridFSBucket(db)
       isConnected = true
       await initializeAdmin()
@@ -88,7 +93,10 @@ async function connectDatabase() {
       return true
     } catch (err) {
       console.error("MongoDB connection error:", err)
-      console.error("Make sure MONGODB_URI is correctly set in environment variables")
+      console.error("Connection details:", {
+        uri: process.env.MONGODB_URI ? "Custom URI set" : "Using default URI",
+        error: err.message,
+      })
       connectionPromise = null
       isConnected = false
       throw err
