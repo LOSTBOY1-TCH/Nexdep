@@ -58,12 +58,12 @@ let connectionPromise = null
 
 async function connectDatabase() {
   if (isConnected && mongoose.connection.readyState === 1) {
-    console.log("Using existing MongoDB connection")
+    console.log("[v0] Using existing MongoDB connection")
     return true
   }
 
   if (connectionPromise) {
-    console.log("Waiting for existing connection attempt")
+    console.log("[v0] Waiting for existing connection attempt")
     return connectionPromise
   }
 
@@ -73,33 +73,42 @@ async function connectDatabase() {
         process.env.MONGODB_URI ||
         "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
 
+      if (!MONGODB_URI) {
+        throw new Error("MONGODB_URI is not defined")
+      }
+
+      console.log("[v0] Attempting MongoDB connection...")
+
       await mongoose.connect(MONGODB_URI, {
         maxPoolSize: 10,
         minPoolSize: 2,
-        serverSelectionTimeoutMS: 15000,
-        socketTimeoutMS: 60000,
-        connectTimeoutMS: 15000,
-        heartbeatFrequencyMS: 10000,
-        retryWrites: true,
-        retryReads: true,
+        serverSelectionTimeoutMS: 30000,
+        socketTimeoutMS: 75000,
+        connectTimeoutMS: 30000,
+        family: 4,
       })
-      console.log("MongoDB connected successfully")
+
+      console.log("[v0] MongoDB connected successfully")
       const dbName = mongoose.connection.name || "nexdrop"
+      console.log("[v0] Using database:", dbName)
+
       db = mongoose.connection.getClient().db(dbName)
       gridFSBucket = new GridFSBucket(db)
       isConnected = true
+
       await initializeAdmin()
       connectionPromise = null
       return true
     } catch (err) {
-      console.error("MongoDB connection error:", err)
-      console.error("Connection details:", {
-        uri: process.env.MONGODB_URI ? "Custom URI set" : "Using default URI",
-        error: err.message,
+      console.error("[v0] MongoDB connection error:", err.message)
+      console.error("[v0] Error details:", {
+        name: err.name,
+        code: err.code,
+        uri: process.env.MONGODB_URI ? "Custom URI provided" : "Using fallback URI",
       })
       connectionPromise = null
       isConnected = false
-      throw err
+      throw new Error(`Database connection failed: ${err.message}`)
     }
   })()
 
@@ -159,6 +168,7 @@ const requireAuth = (req, res, next) => {
 
 async function initializeAdmin() {
   try {
+    console.log("[v0] Checking for admin user...")
     const adminExists = await User.findOne({ username: "nex" })
     if (!adminExists) {
       const hashedPassword = crypto.createHash("sha256").update("n1n2nanaagye").digest("hex")
@@ -168,20 +178,29 @@ async function initializeAdmin() {
         password: hashedPassword,
         isAdmin: true,
       })
-      console.log("Admin user created")
+      console.log("[v0] Admin user 'nex' created successfully")
+    } else {
+      console.log("[v0] Admin user already exists")
     }
   } catch (err) {
-    console.log("Admin initialization error:", err)
+    console.error("[v0] Admin initialization error:", err.message)
   }
 }
 
 app.use(async (req, res, next) => {
   try {
-    await connectDatabase()
+    const connected = await connectDatabase()
+    if (!connected) {
+      throw new Error("Failed to establish database connection")
+    }
     next()
   } catch (err) {
-    console.error("[v0] Database connection failed:", err)
-    res.status(500).json({ error: "Database connection failed. Please check MONGODB_URI environment variable." })
+    console.error("[v0] Database middleware error:", err.message)
+    res.status(503).json({
+      error: "Database service unavailable",
+      message: "Unable to connect to MongoDB. Please check your MONGODB_URI environment variable.",
+      details: process.env.NODE_ENV === "development" ? err.message : undefined,
+    })
   }
 })
 
