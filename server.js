@@ -54,6 +54,7 @@ app.use(
 let db
 let gridFSBucket
 let isConnected = false
+let connectionPromise = null
 
 async function connectDatabase() {
   if (isConnected && mongoose.connection.readyState === 1) {
@@ -61,27 +62,51 @@ async function connectDatabase() {
     return true
   }
 
-  try {
-    await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/nexdrop", {
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-      family: 4,
-    })
-    console.log("MongoDB connected successfully")
-    db = mongoose.connection.getClient().db("nexdrop")
-    gridFSBucket = new GridFSBucket(db)
-    isConnected = true
-    await initializeAdmin()
-    return true
-  } catch (err) {
-    console.error("MongoDB connection error:", err)
-    console.error("Make sure MongoDB is running and MONGODB_URI is correct")
-    if (!process.env.VERCEL) {
-      process.exit(1)
-    }
-    throw err
+  if (connectionPromise) {
+    console.log("Waiting for existing connection attempt")
+    return connectionPromise
   }
+
+  connectionPromise = (async () => {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/nexdrop", {
+        maxPoolSize: 10,
+        minPoolSize: 2,
+        serverSelectionTimeoutMS: 15000,
+        socketTimeoutMS: 60000,
+        connectTimeoutMS: 15000,
+        heartbeatFrequencyMS: 10000,
+        retryWrites: true,
+        retryReads: true,
+      })
+      console.log("MongoDB connected successfully")
+      db = mongoose.connection.getClient().db("nexdrop")
+      gridFSBucket = new GridFSBucket(db)
+      isConnected = true
+      await initializeAdmin()
+      connectionPromise = null
+      return true
+    } catch (err) {
+      console.error("MongoDB connection error:", err)
+      console.error("Make sure MONGODB_URI is correctly set in environment variables")
+      connectionPromise = null
+      isConnected = false
+      throw err
+    }
+  })()
+
+  return connectionPromise
 }
+
+mongoose.connection.on("disconnected", () => {
+  console.log("MongoDB disconnected")
+  isConnected = false
+})
+
+mongoose.connection.on("error", (err) => {
+  console.error("MongoDB connection error:", err)
+  isConnected = false
+})
 
 // Schemas
 const userSchema = new mongoose.Schema({
@@ -147,7 +172,8 @@ app.use(async (req, res, next) => {
     await connectDatabase()
     next()
   } catch (err) {
-    res.status(500).json({ error: "Database connection failed" })
+    console.error("[v0] Database connection failed:", err)
+    res.status(500).json({ error: "Database connection failed. Please check MONGODB_URI environment variable." })
   }
 })
 
