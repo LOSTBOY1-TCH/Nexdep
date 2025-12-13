@@ -5,6 +5,7 @@ const multer = require("multer")
 const path = require("path")
 const crypto = require("crypto")
 const session = require("express-session")
+const MongoStore = require("connect-mongo")
 
 const app = express()
 
@@ -13,24 +14,25 @@ const uploadMemory = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 })
 
+app.use((req, res, next) => {
+  const origin = req.headers.origin
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin)
+  }
+  res.setHeader("Access-Control-Allow-Credentials", "true")
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200)
+  }
+  next()
+})
+
 // Middleware
 app.use(express.static(path.join(__dirname, "../public")))
 app.use(express.json({ limit: "100mb" }))
 app.use(express.urlencoded({ limit: "100mb", extended: true }))
-
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-    },
-  }),
-)
 
 // MongoDB Connection
 let cachedDb = null
@@ -41,7 +43,9 @@ async function connectDatabase() {
   }
 
   try {
-    const MONGODB_URI = process.env.MONGODB_URI
+    const MONGODB_URI =
+      process.env.MONGODB_URI ||
+      "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
 
     if (!MONGODB_URI) {
       throw new Error("MONGODB_URI environment variable is not set")
@@ -56,15 +60,46 @@ async function connectDatabase() {
     })
 
     cachedDb = mongoose.connection.getClient().db()
+    console.log("[v0] MongoDB connected successfully")
 
     // Initialize admin user
     await initializeAdmin()
 
     return cachedDb
   } catch (err) {
-    console.error("MongoDB connection error:", err)
+    console.error("[v0] MongoDB connection error:", err)
     throw err
   }
+}
+
+let sessionMiddleware = null
+
+function getSessionMiddleware() {
+  if (!sessionMiddleware) {
+    const MONGODB_URI =
+      process.env.MONGODB_URI ||
+      "mongodb+srv://lostboytech1:n1n2nanaagye@cluster0.yqp30.mongodb.net/nexdrop?retryWrites=true&w=majority&appName=nexdrop"
+
+    sessionMiddleware = session({
+      secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
+      resave: false,
+      saveUninitialized: false,
+      store: MongoStore.create({
+        mongoUrl: MONGODB_URI,
+        touchAfter: 24 * 3600,
+        crypto: {
+          secret: process.env.SESSION_SECRET || "nexdrop-secret-key-change-in-production",
+        },
+      }),
+      cookie: {
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      },
+    })
+  }
+  return sessionMiddleware
 }
 
 // Schemas
@@ -102,7 +137,11 @@ const FileMetadata = mongoose.models.FileMetadata || mongoose.model("FileMetadat
 const SiteStats = mongoose.models.SiteStats || mongoose.model("SiteStats", siteStatsSchema)
 
 const requireAuth = (req, res, next) => {
-  if (!req.session.userId) {
+  console.log("[v0] Auth check - Session:", req.session)
+  console.log("[v0] Auth check - User ID:", req.session?.userId)
+
+  if (!req.session || !req.session.userId) {
+    console.log("[v0] Auth failed: No session or userId")
     return res.status(401).json({ success: false, message: "Not authenticated" })
   }
   next()
@@ -119,18 +158,20 @@ async function initializeAdmin() {
         password: hashedPassword,
         isAdmin: true,
       })
+      console.log("[v0] Admin user created")
     }
   } catch (err) {
-    console.error("Admin initialization error:", err)
+    console.error("[v0] Admin initialization error:", err)
   }
 }
 
 app.use(async (req, res, next) => {
   try {
     await connectDatabase()
-    next()
+    // Apply session middleware dynamically
+    getSessionMiddleware()(req, res, next)
   } catch (err) {
-    console.error("Database connection failed:", err)
+    console.error("[v0] Database connection failed:", err)
     return res.status(503).json({
       success: false,
       error: "Database connection failed. Please check MONGODB_URI environment variable.",
@@ -142,6 +183,9 @@ app.use(async (req, res, next) => {
 app.post("/api/signup", async (req, res) => {
   try {
     const { username, email, password, confirmPassword } = req.body
+
+    console.log("[v0] Signup attempt:", username)
+
     if (password !== confirmPassword) {
       return res.json({ success: false, message: "Passwords do not match" })
     }
@@ -156,8 +200,18 @@ app.post("/api/signup", async (req, res) => {
     req.session.username = user.username
     req.session.isAdmin = false
 
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err)
+        else resolve()
+      })
+    })
+
+    console.log("[v0] Signup successful, session saved:", req.session.userId)
+
     res.json({ success: true, redirect: "/dashboard" })
   } catch (err) {
+    console.error("[v0] Signup error:", err)
     res.json({ success: false, message: err.message })
   }
 })
@@ -165,6 +219,9 @@ app.post("/api/signup", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { username, password } = req.body
+
+    console.log("[v0] Login attempt:", username)
+
     const user = await User.findOne({ username })
     if (!user) {
       return res.json({ success: false, message: "User not found" })
@@ -181,8 +238,21 @@ app.post("/api/login", async (req, res) => {
     req.session.username = user.username
     req.session.isAdmin = user.isAdmin
 
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error("[v0] Session save error:", err)
+          reject(err)
+        } else {
+          console.log("[v0] Session saved successfully:", req.session.userId)
+          resolve()
+        }
+      })
+    })
+
     res.json({ success: true, redirect: "/dashboard" })
   } catch (err) {
+    console.error("[v0] Login error:", err)
     res.json({ success: false, message: err.message })
   }
 })
@@ -193,7 +263,9 @@ app.get("/api/logout", (req, res) => {
 })
 
 app.get("/api/auth/check", (req, res) => {
-  if (req.session.userId) {
+  console.log("[v0] Auth check request - Session:", req.session)
+
+  if (req.session && req.session.userId) {
     res.json({
       authenticated: true,
       username: req.session.username,
@@ -207,7 +279,10 @@ app.get("/api/auth/check", (req, res) => {
 // File Upload Routes
 app.post("/api/upload", uploadMemory.single("file"), async (req, res) => {
   try {
-    if (!req.session.userId) {
+    console.log("[v0] Upload attempt - Session:", req.session)
+
+    if (!req.session || !req.session.userId) {
+      console.log("[v0] Upload failed: Not authenticated")
       return res.json({ success: false, message: "Not authenticated" })
     }
     if (!req.file) {
@@ -241,9 +316,11 @@ app.post("/api/upload", uploadMemory.single("file"), async (req, res) => {
       uploadStream.on("error", reject)
     })
 
+    console.log("[v0] Upload successful:", downloadSlug)
+
     res.json({ success: true, downloadSlug, actualSize: req.file.size })
   } catch (err) {
-    console.error("Upload error:", err)
+    console.error("[v0] Upload error:", err)
     res.json({ success: false, message: err.message })
   }
 })
@@ -267,7 +344,7 @@ app.get("/api/download/:slug", async (req, res) => {
 
     downloadStream.pipe(res)
   } catch (err) {
-    console.error("Download error:", err)
+    console.error("[v0] Download error:", err)
     res.status(500).json({ error: err.message })
   }
 })
